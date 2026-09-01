@@ -1,0 +1,119 @@
+PARAMETER TELEMETRI DAN IMPLEMENTASI PADA SISTEM CNN-PReLU
+Klasifikasi Perilaku Pengemudi Agresif Berbasis Telemetri (BeamNG.drive)
+============================================================
+
+1. PARAMETER TELEMETRI UTAMA (sesuai Batasan Masalah Proposal)
+
+1.1 Kecepatan (Speed)
+    - Sumber   : BeamNG.drive API (electrics.wheelspeed / vehicle state)
+    - Satuan   : m/s atau km/h
+    - Peran    : Merepresentasikan tempo berkendara; lonjakan/penurunan
+                 tajam berulang jadi indikator gaya ugal-ugalan.
+
+1.2 Akselerasi / Deselerasi
+    - Sumber   : Turunan (derivative) dari kecepatan terhadap waktu,
+                 atau langsung dari sensor akselerometer simulator.
+    - Satuan   : m/s^2
+    - Peran    : Nilai akselerasi/deselerasi ekstrem dan sering berubah
+                 mengindikasikan pengereman/tancap gas mendadak.
+
+1.3 RPM (Putaran Mesin)
+    - Sumber   : electrics.rpm
+    - Satuan   : rpm
+    - Peran    : RPM tinggi berkelanjutan atau naik-turun agresif
+                 mencerminkan gaya berkendara tidak efisien/berisiko.
+
+1.4 Kedalaman Pedal Gas (Throttle Input)
+    - Sumber   : electrics.throttle_input
+    - Rentang  : 0.0 - 1.0 (normalisasi)
+    - Peran    : Pola throttle mendadak (0 -> 1 dalam waktu singkat)
+                 jadi sinyal akselerasi agresif.
+
+1.5 Kedalaman Pedal Rem (Brake Input)
+    - Sumber   : electrics.brake_input
+    - Rentang  : 0.0 - 1.0 (normalisasi)
+    - Peran    : Pengereman mendadak/berulang (hard braking) jadi
+                 indikator utama perilaku ugal-ugalan.
+
+2. PARAMETER TAMBAHAN (opsional, memperkuat akurasi klasifikasi)
+
+2.1 Steering Angle
+    - Sumber   : electrics.steering / steering_input
+    - Peran    : Mendeteksi manuver berpindah jalur berkali-kali
+                 (pola lintasan menyerupai huruf S).
+
+2.2 Lateral & Longitudinal Acceleration (G-force)
+    - Sumber   : sensor IMU simulator (g-force pada sumbu X/Y)
+    - Peran    : Membedakan manuver agresif (belok tajam, zig-zag)
+                 dari akselerasi/deselerasi lurus biasa.
+
+2.3 Yaw Rate
+    - Sumber   : sensor IMU / physics state kendaraan
+    - Peran    : Mendeteksi oversteer atau perubahan arah mendadak.
+
+3. PRA-PEMROSESAN DATA
+
+    a. Sinkronisasi timestamp semua channel ke sampling rate seragam
+       (misal 20-50 Hz) menggunakan Pandas.
+    b. Normalisasi tiap parameter (min-max atau z-score) dengan Numpy
+       agar skala antar fitur (RPM vs throttle 0-1) tidak bias model.
+    c. Sliding window: memotong data time-series menjadi segmen tetap
+       (misal window 2-5 detik) sebagai satu sample input model, dengan
+       overlap tertentu untuk memperbanyak data latih.
+    d. Labeling tiap window: "normal" atau "agresif/ugal-ugalan"
+       berdasarkan skenario simulasi yang dijalankan.
+
+4. IMPLEMENTASI PADA ARSITEKTUR CNN
+
+    a. Bentuk Input
+       - Data direpresentasikan sebagai matriks 2D per sample:
+         (jumlah_timestep, jumlah_channel_parameter).
+       - Karena data bersifat sekuensial (bukan citra), digunakan
+         1D-CNN: kernel konvolusi bergerak sepanjang sumbu waktu,
+         tiap parameter telemetri diperlakukan sebagai channel.
+
+    b. Convolutional Layer
+       - Beberapa layer Conv1D menyaring pola lokal jangka pendek
+         antar-parameter (misal korelasi lonjakan throttle dengan
+         percepatan RPM dan akselerasi dalam rentang waktu singkat).
+       - Filter belajar mengenali "motif" perilaku, misal pola rem
+         mendadak diikuti akselerasi tajam berulang.
+
+    c. Fungsi Aktivasi PReLU (Parametric ReLU)
+       - Diterapkan setelah tiap Conv1D layer (menggantikan ReLU).
+       - Formula: f(x) = x jika x > 0, f(x) = a*x jika x <= 0
+         dengan parameter "a" dipelajari otomatis selama training
+         (per-channel atau per-layer), bukan konstanta tetap seperti
+         Leaky ReLU.
+       - Tujuan: mengatasi masalah "dying ReLU" -- neuron yang
+         permanen tidak aktif akibat input negatif konsisten -- yang
+         rawan terjadi pada data telemetri karena banyak nilai
+         negatif/mendekati nol (misal saat deselerasi atau throttle
+         di titik netral).
+       - Dengan slope negatif adaptif, PReLU menjaga aliran gradien
+         tetap hidup pada region negatif, sehingga model tetap bisa
+         mempelajari pola halus dari kombinasi kelima parameter di
+         atas, termasuk transisi cepat antar kondisi (misal dari
+         akselerasi ke deselerasi).
+
+    d. Pooling Layer
+       - MaxPooling1D/AveragePooling1D untuk mereduksi dimensi
+         temporal dan mengambil fitur paling dominan tiap segmen.
+
+    e. Fully Connected + Output Layer
+       - Fitur hasil ekstraksi Conv+PReLU diratakan (flatten) lalu
+         diteruskan ke dense layer.
+       - Output layer memakai aktivasi Sigmoid (klasifikasi biner:
+         normal vs agresif/ugal-ugalan) dengan loss Binary
+         Cross-Entropy.
+
+5. FRAMEWORK & TOOLS IMPLEMENTASI
+
+    - BeamNG.drive API   : streaming data telemetri real-time dari
+                            simulator ke Python.
+    - Python 3.10.x       : bahasa pemrograman utama.
+    - Pandas & Numpy      : pembersihan data, perhitungan matriks
+                            telemetri sekuensial, sliding window.
+    - PyTorch / TensorFlow: membangun arsitektur 1D-CNN dengan
+                            aktivasi PReLU custom, training, evaluasi
+                            model (akurasi, precision, recall, F1).
