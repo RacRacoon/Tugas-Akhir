@@ -1,0 +1,14 @@
+# Dibuat dari venv_ai/ yang sudah terpasang (Python 3.11.9).
+# Install: python -m venv venv_ai && venv_ai\Scripts\activate && pip install -r requirements.txt
+#
+# tensorflow-cpu dipakai karena venv_ai lama tidak pakai GPU. Kalau PC simulator
+# punya GPU NVIDIA + CUDA/cuDNN terpasang, ganti baris tensorflow-cpu jadi:
+#   tensorflow==2.21.0
+
+numpy==2.4.4
+pandas==3.0.2
+scikit-learn==1.8.0
+tensorflow-cpu==2.21.0
+joblib==1.5.3
+matplotlib==3.10.8
+seaborn==0.13.2
