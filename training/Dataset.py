@@ -14,11 +14,14 @@ FEATURES = ['speed_kmh', 'rpm', 'gear', 'throttle', 'brake',
 # Perekaman 10 Hz -> jarak normal ~0.1 s. Lebih dari ini = sesi baru / ada bagian hilang.
 GAP_S = 1.0
 
-# Filter untuk membuang data ambigu
-MIN_SPEED_KMH        = 15     # berlaku untuk KEDUA kelas (mobil diam terlihat sama di dua gaya)
-NORMAL_MAX_RPM       = 4000
-NORMAL_MAX_THROTTLE  = 70     # persen (0-100)
-NORMAL_MAX_SPEED_KMH = 120
+# Filter untuk membuang data ambigu. HANYA filter fisik netral (berlaku sama
+# untuk kedua kelas) yang boleh ada di sini — bukan ambang rpm/throttle/speed
+# per kelas. Label "normal" vs "racing" berasal dari SESI rekaman (niat
+# pengemudi saat itu), bukan dari nilai fitur. Kalau kelas "normal" dipaksa
+# tidak pernah punya rpm/throttle/speed tinggi lewat filter, model cukup
+# belajar ambang itu, bukan pola perilaku — makanya ambang per kelas yang
+# dulu ada di sini (NORMAL_MAX_RPM/THROTTLE/SPEED) dihapus.
+MIN_SPEED_KMH = 15     # buang baris mobil diam; identik di kedua kelas
 
 
 # ============================================================
@@ -88,17 +91,17 @@ def prepare_class(path: str, label: str, keep_fn, seg_offset: int) -> tuple:
     return df, stats
 
 
-def keep_normal(df: pd.DataFrame) -> pd.Series:
-    return (
-        (df['rpm']       <= NORMAL_MAX_RPM)      &
-        (df['throttle']  <= NORMAL_MAX_THROTTLE) &
-        (df['speed_kmh'] <= NORMAL_MAX_SPEED_KMH) &
-        (df['speed_kmh'] >= MIN_SPEED_KMH)
-    )
-
-
-def keep_racing(df: pd.DataFrame) -> pd.Series:
+def keep_idle_removed(df: pd.DataFrame) -> pd.Series:
+    """Filter netral: buang baris mobil diam. Sama untuk kedua kelas, jadi
+    tidak mendefinisikan 'normal'/'racing' lewat nilai fitur."""
     return df['speed_kmh'] >= MIN_SPEED_KMH
+
+
+# Alias — dipakai per kelas di prepare_class() supaya nanti mudah diberi
+# filter khusus kelas lagi kalau memang diperlukan (dengan alasan yang jelas,
+# bukan ambang yang kebetulan sama dengan fitur model).
+keep_normal = keep_idle_removed
+keep_racing = keep_idle_removed
 
 
 # ============================================================
@@ -113,7 +116,8 @@ def merge_beamng_data(normal_path: str, racing_path: str, output_name: str = 'da
       - Baris TIDAK di-shuffle dan TIDAK disambung lintas segmen.
       - Kolom `segment` dipakai training.py untuk membuat window dan membagi
         train/val/test tanpa kebocoran (window overlap antar split).
-      - Ambang filter Normal mendefinisikan apa itu "normal"; lihat konstanta di atas.
+      - Label "normal"/"racing" murni dari sesi rekaman (nama file), bukan
+        dari ambang nilai fitur — lihat keep_idle_removed() di atas.
     """
     for p in (normal_path, racing_path):
         if not os.path.exists(p):
