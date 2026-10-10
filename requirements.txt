@@ -1,5 +1,11 @@
 # Dibuat dari venv_ai/ yang sudah terpasang (Python 3.11.9).
-# Install: python -m venv venv_ai && venv_ai\Scripts\activate && pip install -r requirements.txt
+#
+# PYTHON WAJIB 3.10-3.13. tensorflow-cpu==2.21.0 belum punya wheel untuk 3.14+.
+# Kalau PC kamu sudah pakai Python 3.14+, pasang 3.13 terpisah khusus venv ini:
+#   winget install Python.Python.3.13
+#   py -3.13 -m venv venv_ai
+#   venv_ai\Scripts\activate
+#   pip install -r requirements.txt
 #
 # tensorflow-cpu dipakai karena venv_ai lama tidak pakai GPU. Kalau PC simulator
 # punya GPU NVIDIA + CUDA/cuDNN terpasang, ganti baris tensorflow-cpu jadi:
