@@ -3,9 +3,12 @@ telemetry.py (v2)
 Klasifikasi gaya berkendara BeamNG.drive secara real-time.
 
 Beda dari versi sebelumnya:
-  - Baca OutGauge (4444), OutSim (4123), DAN steertx (mod custom protocol),
-    bukan OutGauge saja.
-  - accel_ms2 dari sensor OutSim, plus fitur accel_lat, yaw_rate, steering.
+  - Baca OutGauge (4444) dan OutSim (4123), bukan OutGauge saja.
+  - accel_ms2 dari sensor OutSim, plus fitur accel_lat, yaw_rate.
+  - steering diESTIMASI tiap tick dari yaw_rate+speed pakai model kinematik
+    yang sama dengan telext_v2.estimate_steering() (mod custom protocol Lua
+    yang sebelumnya dipakai bikin vehicle gagal load di BeamNG.drive, sudah
+    didrop total -- lihat komentar di telext_v2.py).
   - steering_speed & steering_accel dihitung live di sini dari histori
     steering 3 tick terakhir dan RATE_HZ tetap (bukan timestamp per-paket,
     karena di real-time tidak ada konsep "segmen" seperti training — selama
@@ -97,8 +100,10 @@ current_style       = 'NORMAL'
 tick_counter        = 0
 
 
-def make_row(latest_g: dict, latest_s: dict, latest_st: dict) -> dict:
-    return {**latest_g, **latest_s, **latest_st}
+def make_row(latest_g: dict, latest_s: dict) -> dict:
+    row = {**latest_g, **latest_s}
+    row['steering'] = rec.estimate_steering(row['speed_kmh'], row['yaw_rate'])
+    return row
 
 
 def update_steering_derivatives(steering: float) -> tuple:
@@ -130,21 +135,20 @@ def main():
 
     g_sock = rec.make_socket(rec.OUTGAUGE_ADDR)
     s_sock = rec.make_socket(rec.OUTSIM_ADDR)
-    st_sock = rec.make_socket(rec.STEER_ADDR)
 
     interval  = 1.0 / RATE_HZ
     next_tick = time.perf_counter() + interval
-    latest_g = latest_s = latest_st = None
-    t_g = t_s = t_st = 0.0
+    latest_g = latest_s = None
+    t_g = t_s = 0.0
 
     print(f'Siap! Monitoring BeamNG — OutGauge:{rec.OUTGAUGE_ADDR[1]} '
-          f'+ OutSim:{rec.OUTSIM_ADDR[1]} + steertx:{rec.STEER_ADDR[1]} @ {RATE_HZ:.0f} Hz')
+          f'+ OutSim:{rec.OUTSIM_ADDR[1]} @ {RATE_HZ:.0f} Hz')
     print('Tekan Ctrl+C untuk berhenti.\n')
 
     try:
         while True:
             timeout = max(0.0, next_tick - time.perf_counter())
-            ready, _, _ = select.select([g_sock, s_sock, st_sock], [], [], timeout)
+            ready, _, _ = select.select([g_sock, s_sock], [], [], timeout)
 
             for s in ready:
                 raw, _addr = s.recvfrom(1024)
@@ -153,21 +157,19 @@ def main():
                     latest_g, t_g = rec.parse_outgauge(raw), now
                 elif s is s_sock and len(raw) >= rec.OUTSIM_MIN_LEN:
                     latest_s, t_s = rec.parse_outsim(raw), now
-                elif s is st_sock and len(raw) >= rec.STEER_MIN_LEN:
-                    latest_st, t_st = rec.parse_steer(raw), now
 
             now = time.perf_counter()
             if now < next_tick:
                 continue
             next_tick = now + interval if now - next_tick > interval else next_tick + interval
 
-            if latest_g is None or latest_s is None or latest_st is None \
-                    or now - t_g > STALE_S or now - t_s > STALE_S or now - t_st > STALE_S:
-                print('\rMenunggu OutGauge+OutSim+steertx... (aktifkan di Options > Other, '
-                      'steertx perlu mod BeamNG_Mod/ terpasang)', end='', flush=True)
+            if latest_g is None or latest_s is None \
+                    or now - t_g > STALE_S or now - t_s > STALE_S:
+                print('\rMenunggu OutGauge+OutSim... (aktifkan di Options > Other)',
+                      end='', flush=True)
                 continue
 
-            row = make_row(latest_g, latest_s, latest_st)
+            row = make_row(latest_g, latest_s)
             row['steering_speed'], row['steering_accel'] = \
                 update_steering_derivatives(row['steering'])
 
@@ -209,7 +211,7 @@ def main():
                 f' | Score: {smoothed:.3f}'
                 f' | Spd: {row["speed_kmh"]:>6.1f} km/h'
                 f' | RPM: {row["rpm"]:>5.0f}'
-                f' | STEER: {row["steering"]:>5.2f}',
+                f' | STEER~{row["steering"]:>5.2f}',
                 end='', flush=True
             )
 
@@ -218,7 +220,6 @@ def main():
     finally:
         g_sock.close()
         s_sock.close()
-        st_sock.close()
 
 
 if __name__ == '__main__':
