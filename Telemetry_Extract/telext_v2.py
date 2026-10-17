@@ -2,12 +2,18 @@
 telext_v2.py
 Merekam telemetri BeamNG.drive ke CSV dari DUA sumber UDP:
 
-  - OutGauge (port 4444): speed, rpm, gear, throttle, brake
-  - OutSim   (port 4123): akselerasi longitudinal/lateral dan yaw rate (sensor asli)
-                          CATATAN: struct di bawah ini masih asumsi gaya LFS/OutSim
-                          klasik, BELUM diverifikasi terhadap protokol MotionSim resmi
-                          BeamNG (beda struct, lihat dokumentasi). Belum diperbaiki —
-                          sengaja ditunda, lihat riwayat chat.
+  - OutGauge  (port 4444): speed, rpm, gear, throttle, brake
+  - MotionSim (port 4123): akselerasi longitudinal/lateral dan yaw rate (sensor asli)
+      Struct resmi (docs BeamNG, diverifikasi lewat --probe di game, 88 byte):
+        char  format[4] = "BNG1"
+        float posX,posY,posZ        (posisi dunia)
+        float velX,velY,velZ        (velocity, m/s)
+        float accX,accY,accZ        (akselerasi, gravitasi sudah dikeluarkan)
+        float upX,upY,upZ           (up vector, ~(0,0,1) saat tegak)
+        float rollPos,pitchPos,yawPos
+        float rollVel,pitchVel,yawVel
+        float rollAcc,pitchAcc,yawAcc
+      Hasil probe: accY = longitudinal (+ saat gas), accX = lateral.
 
 Steering TIDAK direkam langsung. Percobaan sebelumnya pakai mod custom
 protocol Lua (BeamNG_Mod/steertx/) gagal — mod itu bikin vehicle gagal load
@@ -24,7 +30,7 @@ sendiri hubungan atan() itu. WHEELBASE_M WAJIB disesuaikan dengan mobil yang
 dipakai merekam (lihat konstanta di bawah).
 
 Beda dari telext_advanced.py:
-  - accel_ms2 diambil dari sensor OutSim, bukan turunan speed (lebih bersih).
+  - accel_ms2 diambil dari sensor MotionSim, bukan turunan speed (lebih bersih).
   - Tambah accel_lat (gaya samping), yaw_rate (kecepatan putar body), dan
     steering (estimasi, lihat di atas).
     steering_speed & steering_accel TIDAK dihitung di sini — itu turunan yang
@@ -34,9 +40,9 @@ Beda dari telext_advanced.py:
   - jerk dihapus (tidak dipakai training, hanya menambah noise).
 
 Aktifkan dulu di BeamNG.drive: Options > Other > Protocols > OutGauge dan
-OutSim. IP 127.0.0.1, port sesuai konstanta di bawah.
+MotionSim. IP 127.0.0.1, port sesuai konstanta di bawah.
 
-Mode probe untuk memverifikasi layout paket OutSim di mesin kamu:
+Mode probe untuk memverifikasi sumbu & tanda MotionSim di mesin kamu:
     python telext_v2.py --probe
 """
 
@@ -53,15 +59,17 @@ import time
 # ============================================================
 # KONFIGURASI
 # ============================================================
-OUTGAUGE_ADDR = ('127.0.0.1', 4444)
-OUTSIM_ADDR   = ('127.0.0.1', 4123)
-CSV_FILE      = 'Extracted_v2.csv'
-RATE_HZ       = 10.0
-STALE_S       = 0.5     # paket lebih tua dari ini dianggap tidak ada
+OUTGAUGE_ADDR  = ('127.0.0.1', 4444)
+MOTIONSIM_ADDR = ('127.0.0.1', 4123)
+CSV_FILE       = 'Extracted_v2.csv'
+RATE_HZ        = 10.0
+STALE_S        = 0.5     # paket lebih tua dari ini dianggap tidak ada
 
-# Pemetaan sumbu OutSim (indeks 0..2 pada vektor Accel / AngVel).
-# Asumsi awal mengikuti layout OutSim ala LFS: X kanan, Y depan, Z atas.
-# WAJIB dicek dengan --probe, lalu ubah axis/tanda di sini bila perlu.
+# Pemetaan sumbu MotionSim (indeks 0..2 pada vektor acc / angVel).
+# accY = longitudinal (+ saat gas) dan accX = lateral sudah diverifikasi lewat
+# --probe. Tanda lateral & yaw (kiri vs kanan) belum -- cek dengan --probe
+# sambil belok kiri lalu kanan. Untuk klasifikasi tanda ini tidak kritis
+# (model belajar pola, bukan arah), tapi harus KONSISTEN antar rekaman.
 ACCEL_LON_AXIS, ACCEL_LON_SIGN = 1, 1.0
 ACCEL_LAT_AXIS, ACCEL_LAT_SIGN = 0, 1.0
 YAW_AXIS,       YAW_SIGN       = 2, 1.0
@@ -73,8 +81,9 @@ MIN_SPEED_EST = 0.5   # m/s, floor penyebut biar gak div-by-zero saat nyaris dia
 FIELDS = ['timestamp', 'car', 'speed_kmh', 'rpm', 'gear',
           'throttle', 'brake', 'accel_ms2', 'accel_lat', 'yaw_rate', 'steering']
 
-OUTSIM_MIN_LEN   = 52   # uint time + 12 float
-OUTGAUGE_MIN_LEN = 56   # sampai field brake
+MOTIONSIM_MAGIC   = b'BNG1'
+MOTIONSIM_MIN_LEN = 88   # char[4] + 21 float
+OUTGAUGE_MIN_LEN  = 56   # sampai field brake
 
 
 # ============================================================
@@ -97,11 +106,20 @@ def parse_outgauge(data: bytes) -> dict:
     }
 
 
-def parse_outsim(data: bytes) -> dict:
-    # uint time, AngVel[3], Heading, Pitch, Roll, Accel[3], Vel[3], (Pos[3], ID)
-    vals    = struct.unpack_from('<I12f', data, 0)
-    ang_vel = vals[1:4]
-    accel   = vals[7:10]
+def unpack_motionsim(data: bytes) -> dict:
+    """Pecah paket MotionSim jadi 7 vektor 3 elemen (lihat docstring modul)."""
+    v = struct.unpack_from('<21f', data, 4)
+    names = ('pos', 'vel', 'acc', 'up', 'ang', 'ang_vel', 'ang_acc')
+    return {n: v[i * 3:i * 3 + 3] for i, n in enumerate(names)}
+
+
+def is_motionsim(data: bytes) -> bool:
+    return len(data) >= MOTIONSIM_MIN_LEN and data[:4] == MOTIONSIM_MAGIC
+
+
+def parse_motionsim(data: bytes) -> dict:
+    m = unpack_motionsim(data)
+    accel, ang_vel = m['acc'], m['ang_vel']
     return {
         'accel_ms2': round(ACCEL_LON_SIGN * accel[ACCEL_LON_AXIS], 3),
         'accel_lat': round(ACCEL_LAT_SIGN * accel[ACCEL_LAT_AXIS], 3),
@@ -130,9 +148,11 @@ def make_socket(addr) -> socket.socket:
 # ============================================================
 def probe():
     g_sock = make_socket(OUTGAUGE_ADDR)
-    s_sock = make_socket(OUTSIM_ADDR)
-    print('PROBE: gas/rem/belok di game, lihat sumbu mana yang berubah. Ctrl+C untuk berhenti.\n')
+    s_sock = make_socket(MOTIONSIM_ADDR)
+    print('PROBE: gas/rem/belok di game, lihat sumbu mana yang berubah. Ctrl+C untuk berhenti.')
+    print('Cek tanda: belok KIRI dulu beberapa detik, lalu KANAN -- catat tanda acc[X] & ang_vel[Z].\n')
     last = 0.0
+    fmt = lambda t: '  '.join(f'{x:8.3f}' for x in t)  # noqa: E731
     try:
         while True:
             ready, _, _ = select.select([g_sock, s_sock], [], [], 0.2)
@@ -141,14 +161,18 @@ def probe():
                 now = time.perf_counter()
                 if now - last < 0.5:
                     continue
-                if s is s_sock and len(raw) >= OUTSIM_MIN_LEN:
-                    v = struct.unpack_from('<I12f', raw, 0)
+                if s is s_sock:
+                    if not is_motionsim(raw):
+                        print(f'MotionSim? paket tidak dikenal len={len(raw)} tag={raw[:4]!r}')
+                        continue
+                    m = unpack_motionsim(raw)
                     last = now
-                    print(f'OutSim len={len(raw)} t={v[0]}\n'
-                          f'  angvel = {v[1]:8.3f} {v[2]:8.3f} {v[3]:8.3f}\n'
-                          f'  hpr    = {v[4]:8.3f} {v[5]:8.3f} {v[6]:8.3f}\n'
-                          f'  accel  = {v[7]:8.3f} {v[8]:8.3f} {v[9]:8.3f}\n'
-                          f'  vel    = {v[10]:8.3f} {v[11]:8.3f} {v[12]:8.3f}')
+                    print(f'MotionSim len={len(raw)}\n'
+                          f'  vel     (m/s)   = {fmt(m["vel"])}\n'
+                          f'  acc     (m/s^2) = {fmt(m["acc"])}\n'
+                          f'  up              = {fmt(m["up"])}\n'
+                          f'  ang     (r,p,y) = {fmt(m["ang"])}\n'
+                          f'  ang_vel (r,p,y) = {fmt(m["ang_vel"])}')
                 elif s is g_sock and len(raw) >= OUTGAUGE_MIN_LEN:
                     d = parse_outgauge(raw)
                     print(f"OutGauge len={len(raw)} {d['speed_kmh']} km/h "
@@ -176,7 +200,7 @@ def check_header(path: str):
 def record():
     check_header(CSV_FILE)
     g_sock = make_socket(OUTGAUGE_ADDR)
-    s_sock = make_socket(OUTSIM_ADDR)
+    s_sock = make_socket(MOTIONSIM_ADDR)
 
     interval    = 1.0 / RATE_HZ
     latest_g    = latest_s = None
@@ -202,8 +226,8 @@ def record():
                     now = time.perf_counter()
                     if s is g_sock and len(raw) >= OUTGAUGE_MIN_LEN:
                         latest_g, t_g = parse_outgauge(raw), now
-                    elif s is s_sock and len(raw) >= OUTSIM_MIN_LEN:
-                        latest_s, t_s = parse_outsim(raw), now
+                    elif s is s_sock and is_motionsim(raw):
+                        latest_s, t_s = parse_motionsim(raw), now
 
                 now = time.perf_counter()
                 if now < next_tick:
@@ -213,7 +237,7 @@ def record():
                 if latest_g is None or latest_s is None \
                         or now - t_g > STALE_S or now - t_s > STALE_S:
                     skipped += 1
-                    print(f'\rMenunggu OutGauge+OutSim... (dilewati: {skipped})', end='', flush=True)
+                    print(f'\rMenunggu OutGauge+MotionSim... (dilewati: {skipped})', end='', flush=True)
                     continue
 
                 steering = estimate_steering(latest_g['speed_kmh'], latest_s['yaw_rate'])
@@ -236,7 +260,7 @@ def record():
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument('--probe', action='store_true', help='cetak paket mentah untuk cek sumbu OutSim')
+    ap.add_argument('--probe', action='store_true', help='cetak paket mentah untuk cek sumbu MotionSim')
     args = ap.parse_args()
     probe() if args.probe else record()
 

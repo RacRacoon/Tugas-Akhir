@@ -3,8 +3,8 @@ telemetry.py (v2)
 Klasifikasi gaya berkendara BeamNG.drive secara real-time.
 
 Beda dari versi sebelumnya:
-  - Baca OutGauge (4444) dan OutSim (4123), bukan OutGauge saja.
-  - accel_ms2 dari sensor OutSim, plus fitur accel_lat, yaw_rate.
+  - Baca OutGauge (4444) dan MotionSim (4123), bukan OutGauge saja.
+  - accel_ms2 dari sensor MotionSim, plus fitur accel_lat, yaw_rate.
   - steering diESTIMASI tiap tick dari yaw_rate+speed pakai model kinematik
     yang sama dengan telext_v2.estimate_steering() (mod custom protocol Lua
     yang sebelumnya dipakai bikin vehicle gagal load di BeamNG.drive, sudah
@@ -18,7 +18,7 @@ Beda dari versi sebelumnya:
     Models/features.json (`clip_specs`, ditulis training.py) — bukan
     di-hardcode di sini, jadi ikut kalau training.py diubah.
   - Parsing paket di-import dari Telemetry_Extract/telext_v2.py (satu sumber
-    kebenaran dengan skrip perekam, supaya tidak drift kalau sumbu OutSim
+    kebenaran dengan skrip perekam, supaya tidak drift kalau sumbu MotionSim
     diubah setelah --probe).
   - Sampling di jam tetap (RATE_HZ) sama seperti saat data dilatih, bukan
     tiap paket UDP tiba (~60 Hz) seperti dulu. Window 30 langkah sekarang
@@ -44,7 +44,7 @@ warnings.filterwarnings('ignore', category=UserWarning)
 
 _BASE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(_BASE, '..', 'Telemetry_Extract'))
-import telext_v2 as rec  # noqa: E402  (sumber tunggal parsing OutGauge/OutSim)
+import telext_v2 as rec  # noqa: E402  (sumber tunggal parsing OutGauge/MotionSim)
 
 MODEL_PATH    = os.path.join(_BASE, '..', 'Models', 'driver_style_model.h5')
 SCALER_PATH   = os.path.join(_BASE, '..', 'Models', 'scaler.bin')
@@ -134,7 +134,7 @@ def main():
     global current_style, tick_counter
 
     g_sock = rec.make_socket(rec.OUTGAUGE_ADDR)
-    s_sock = rec.make_socket(rec.OUTSIM_ADDR)
+    s_sock = rec.make_socket(rec.MOTIONSIM_ADDR)
 
     interval  = 1.0 / RATE_HZ
     next_tick = time.perf_counter() + interval
@@ -142,7 +142,7 @@ def main():
     t_g = t_s = 0.0
 
     print(f'Siap! Monitoring BeamNG — OutGauge:{rec.OUTGAUGE_ADDR[1]} '
-          f'+ OutSim:{rec.OUTSIM_ADDR[1]} @ {RATE_HZ:.0f} Hz')
+          f'+ MotionSim:{rec.MOTIONSIM_ADDR[1]} @ {RATE_HZ:.0f} Hz')
     print('Tekan Ctrl+C untuk berhenti.\n')
 
     try:
@@ -155,8 +155,8 @@ def main():
                 now = time.perf_counter()
                 if s is g_sock and len(raw) >= rec.OUTGAUGE_MIN_LEN:
                     latest_g, t_g = rec.parse_outgauge(raw), now
-                elif s is s_sock and len(raw) >= rec.OUTSIM_MIN_LEN:
-                    latest_s, t_s = rec.parse_outsim(raw), now
+                elif s is s_sock and rec.is_motionsim(raw):
+                    latest_s, t_s = rec.parse_motionsim(raw), now
 
             now = time.perf_counter()
             if now < next_tick:
@@ -165,7 +165,7 @@ def main():
 
             if latest_g is None or latest_s is None \
                     or now - t_g > STALE_S or now - t_s > STALE_S:
-                print('\rMenunggu OutGauge+OutSim... (aktifkan di Options > Other)',
+                print('\rMenunggu OutGauge+MotionSim... (aktifkan di Options > Other)',
                       end='', flush=True)
                 continue
 
