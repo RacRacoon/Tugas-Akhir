@@ -12,6 +12,8 @@ from sklearn.metrics import confusion_matrix, classification_report
 import matplotlib.pyplot as plt
 import seaborn as sns
 
+from Dataset import FEATURES  # satu sumber kebenaran daftar fitur dgn Dataset.py
+
 # ============================================================
 # KONFIGURASI
 # ============================================================
@@ -27,13 +29,24 @@ BLOCK_ROWS = 200    # ~20 detik pada 10 Hz
 VAL_FRAC   = 0.15
 TEST_FRAC  = 0.15
 
-# Fitur skema v2 (telext_v2.py). Urutan ini juga harus dipakai saat inferensi.
-FEATURES = ['speed_kmh', 'rpm', 'gear', 'throttle', 'brake',
-            'accel_ms2', 'accel_lat', 'yaw_rate']
+# FEATURES diimpor dari Dataset.py (lihat import di atas). Urutan ini juga
+# harus dipakai saat inferensi (telemetry.py membaca urutan ini dari
+# features.json, bukan hardcode, jadi otomatis ikut kalau FEATURES berubah).
 
-# Batas clipping outlier untuk fitur akselerasi
-ACCEL_CLIP = 15.0   # m/s^2 — lebih dari ini tidak realistis untuk mobil jalan
-CLIP_COLS  = ['accel_ms2', 'accel_lat']
+# Batas clipping outlier — per kolom, karena satuan/skalanya beda-beda.
+# accel_ms2/accel_lat: m/s^2, tidak realistis >15 untuk mobil jalan.
+# steering_speed/steering_accel: turunan 1x & 2x dari steering (biasanya -1..1),
+# jadi skalanya BUKAN m/s^2 — ini PLACEHOLDER, lihat catatan di README setelah
+# rekam data asli: distribusi steering_accel jauh lebih liar daripada
+# steering_speed (turunan ganda memperkuat noise, sama seperti kasus `jerk`
+# yang dulu dihapus) — sesuaikan setelah lihat histogram data nyata.
+CLIP_SPECS = {
+    'accel_ms2':      15.0,
+    'accel_lat':       15.0,
+    'steering_speed':  5.0,
+    'steering_accel': 20.0,
+}
+CLIP_COLS = list(CLIP_SPECS.keys())
 
 # Path output default
 DEFAULT_OUTPUT_DIR = os.path.join(os.path.dirname(__file__), '..', 'Models')
@@ -55,7 +68,8 @@ def make_blocks(df: pd.DataFrame, le: LabelEncoder) -> list:
     blocks = []
     for (label, _seg), grp in df.groupby(['label', 'segment'], sort=False):
         grp = grp.copy()
-        grp[CLIP_COLS] = grp[CLIP_COLS].clip(-ACCEL_CLIP, ACCEL_CLIP)
+        for col, limit in CLIP_SPECS.items():
+            grp[col] = grp[col].clip(-limit, limit)
         values = grp[FEATURES].values.astype(np.float32)
         if len(values) < WINDOW_SIZE:
             continue
@@ -218,7 +232,7 @@ def main():
     joblib.dump(le,     encoder_path)
     with open(config_path, 'w') as f:
         json.dump({'features': FEATURES, 'window_size': WINDOW_SIZE,
-                   'accel_clip': ACCEL_CLIP, 'clip_cols': CLIP_COLS}, f, indent=2)
+                   'clip_specs': CLIP_SPECS}, f, indent=2)
     print(f"\nScaler, encoder & features.json disimpan ke {out_dir}")
 
     # --- Bangun model ---

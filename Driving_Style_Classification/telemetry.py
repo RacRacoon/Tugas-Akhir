@@ -3,8 +3,17 @@ telemetry.py (v2)
 Klasifikasi gaya berkendara BeamNG.drive secara real-time.
 
 Beda dari versi sebelumnya:
-  - Baca OutGauge (4444) DAN OutSim (4123), bukan OutGauge saja.
-  - accel_ms2 dari sensor OutSim, plus fitur baru accel_lat & yaw_rate.
+  - Baca OutGauge (4444), OutSim (4123), DAN steertx (mod custom protocol),
+    bukan OutGauge saja.
+  - accel_ms2 dari sensor OutSim, plus fitur accel_lat, yaw_rate, steering.
+  - steering_speed & steering_accel dihitung live di sini dari histori
+    steering 3 tick terakhir dan RATE_HZ tetap (bukan timestamp per-paket,
+    karena di real-time tidak ada konsep "segmen" seperti training — selama
+    stream terus jalan di RATE_HZ yang sama ini konsisten dengan cara
+    Dataset.py menghitungnya saat training).
+  - Clip per-fitur (steering_accel dkk) diterapkan otomatis dari
+    Models/features.json (`clip_specs`, ditulis training.py) — bukan
+    di-hardcode di sini, jadi ikut kalau training.py diubah.
   - Parsing paket di-import dari Telemetry_Extract/telext_v2.py (satu sumber
     kebenaran dengan skrip perekam, supaya tidak drift kalau sumbu OutSim
     diubah setelah --probe).
@@ -54,7 +63,10 @@ scaler = joblib.load(SCALER_PATH)
 
 with open(FEATURES_PATH) as f:
     _cfg = json.load(f)
-FEATURES = _cfg['features']
+FEATURES   = _cfg['features']
+CLIP_SPECS = _cfg.get('clip_specs', {})
+# Indeks posisi tiap kolom yang perlu di-clip, biar gak perlu cari index tiap tick.
+CLIP_IDX = {FEATURES.index(col): limit for col, limit in CLIP_SPECS.items() if col in FEATURES}
 
 WINDOW_SIZE = model.input_shape[1]
 N_FEATURES  = model.input_shape[2]
@@ -79,12 +91,35 @@ def _predict(x):
 # ============================================================
 data_buffer         = deque(maxlen=WINDOW_SIZE)
 prediction_history  = deque(maxlen=SMOOTHING_LEN)
+steer_hist          = deque(maxlen=3)   # steering mentah 3 tick terakhir
+steer_speed_hist    = deque(maxlen=2)   # steering_speed 2 tick terakhir (buat hitung accel)
 current_style       = 'NORMAL'
 tick_counter        = 0
 
 
-def make_row(latest_g: dict, latest_s: dict) -> dict:
-    return {**latest_g, **latest_s}
+def make_row(latest_g: dict, latest_s: dict, latest_st: dict) -> dict:
+    return {**latest_g, **latest_s, **latest_st}
+
+
+def update_steering_derivatives(steering: float) -> tuple:
+    """
+    steering_speed/steering_accel dari histori 3 tick terakhir, dengan
+    interval tetap 1/RATE_HZ (lihat docstring modul). Dipanggil tepat 1x
+    per tick tersimpan, urut waktu — jangan dipanggil ulang untuk tick yang
+    sama, nanti histori kebanjiran nilai duplikat dan turunan jadi salah.
+    """
+    steer_hist.append(steering)
+    if len(steer_hist) >= 2:
+        speed = (steer_hist[-1] - steer_hist[-2]) * RATE_HZ
+    else:
+        speed = 0.0
+
+    steer_speed_hist.append(speed)
+    if len(steer_speed_hist) >= 2:
+        accel = (steer_speed_hist[-1] - steer_speed_hist[-2]) * RATE_HZ
+    else:
+        accel = 0.0
+    return speed, accel
 
 
 # ============================================================
@@ -95,20 +130,21 @@ def main():
 
     g_sock = rec.make_socket(rec.OUTGAUGE_ADDR)
     s_sock = rec.make_socket(rec.OUTSIM_ADDR)
+    st_sock = rec.make_socket(rec.STEER_ADDR)
 
     interval  = 1.0 / RATE_HZ
     next_tick = time.perf_counter() + interval
-    latest_g = latest_s = None
-    t_g = t_s = 0.0
+    latest_g = latest_s = latest_st = None
+    t_g = t_s = t_st = 0.0
 
     print(f'Siap! Monitoring BeamNG — OutGauge:{rec.OUTGAUGE_ADDR[1]} '
-          f'+ OutSim:{rec.OUTSIM_ADDR[1]} @ {RATE_HZ:.0f} Hz')
+          f'+ OutSim:{rec.OUTSIM_ADDR[1]} + steertx:{rec.STEER_ADDR[1]} @ {RATE_HZ:.0f} Hz')
     print('Tekan Ctrl+C untuk berhenti.\n')
 
     try:
         while True:
             timeout = max(0.0, next_tick - time.perf_counter())
-            ready, _, _ = select.select([g_sock, s_sock], [], [], timeout)
+            ready, _, _ = select.select([g_sock, s_sock, st_sock], [], [], timeout)
 
             for s in ready:
                 raw, _addr = s.recvfrom(1024)
@@ -117,24 +153,32 @@ def main():
                     latest_g, t_g = rec.parse_outgauge(raw), now
                 elif s is s_sock and len(raw) >= rec.OUTSIM_MIN_LEN:
                     latest_s, t_s = rec.parse_outsim(raw), now
+                elif s is st_sock and len(raw) >= rec.STEER_MIN_LEN:
+                    latest_st, t_st = rec.parse_steer(raw), now
 
             now = time.perf_counter()
             if now < next_tick:
                 continue
             next_tick = now + interval if now - next_tick > interval else next_tick + interval
 
-            if latest_g is None or latest_s is None \
-                    or now - t_g > STALE_S or now - t_s > STALE_S:
-                print('\rMenunggu OutGauge+OutSim... (aktifkan di Options > Other)',
-                      end='', flush=True)
+            if latest_g is None or latest_s is None or latest_st is None \
+                    or now - t_g > STALE_S or now - t_s > STALE_S or now - t_st > STALE_S:
+                print('\rMenunggu OutGauge+OutSim+steertx... (aktifkan di Options > Other, '
+                      'steertx perlu mod BeamNG_Mod/ terpasang)', end='', flush=True)
                 continue
 
-            row = make_row(latest_g, latest_s)
+            row = make_row(latest_g, latest_s, latest_st)
+            row['steering_speed'], row['steering_accel'] = \
+                update_steering_derivatives(row['steering'])
+
             try:
                 features = [row[name] for name in FEATURES]
             except KeyError as e:
                 sys.exit(f"Fitur {e} dari features.json tidak tersedia dari telext_v2. "
                           "Model dilatih dengan fitur yang tidak dihasilkan skrip ini.")
+
+            for idx, limit in CLIP_IDX.items():
+                features[idx] = float(np.clip(features[idx], -limit, limit))
 
             data_buffer.append(features)
             tick_counter += 1
@@ -164,7 +208,8 @@ def main():
                 f'\r[{bar}] {color}{current_style:<7}\033[0m'
                 f' | Score: {smoothed:.3f}'
                 f' | Spd: {row["speed_kmh"]:>6.1f} km/h'
-                f' | RPM: {row["rpm"]:>5.0f}',
+                f' | RPM: {row["rpm"]:>5.0f}'
+                f' | STEER: {row["steering"]:>5.2f}',
                 end='', flush=True
             )
 
@@ -173,6 +218,7 @@ def main():
     finally:
         g_sock.close()
         s_sock.close()
+        st_sock.close()
 
 
 if __name__ == '__main__':

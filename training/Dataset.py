@@ -7,8 +7,17 @@ import pandas as pd
 # KONFIGURASI
 # ============================================================
 # Skema CSV v2 (telext_v2.py). Kolom ini wajib ada di Normal.csv dan Racing.csv.
-FEATURES = ['speed_kmh', 'rpm', 'gear', 'throttle', 'brake',
-            'accel_ms2', 'accel_lat', 'yaw_rate']
+RECORDED_FEATURES = ['speed_kmh', 'rpm', 'gear', 'throttle', 'brake',
+                      'accel_ms2', 'accel_lat', 'yaw_rate', 'steering']
+
+# steering_speed & steering_accel TIDAK direkam langsung — BeamNG cuma kasih
+# posisi setir (steering), bukan kecepatan/akselerasinya. Dihitung di sini,
+# bukan di telext_v2.py, supaya pakai timestamp ASLI per baris & terikat ke
+# batas segmen (lihat add_steering_derivatives) — bukan asumsi dt tetap yang
+# gampang goyah oleh jitter waktu kedatangan paket UDP.
+DERIVED_FEATURES = ['steering_speed', 'steering_accel']
+
+FEATURES = RECORDED_FEATURES + DERIVED_FEATURES
 
 # Selisih timestamp antar baris (detik) yang dianggap sebagai putusnya rekaman.
 # Perekaman 10 Hz -> jarak normal ~0.1 s. Lebih dari ini = sesi baru / ada bagian hilang.
@@ -35,12 +44,12 @@ def load_recording(path: str) -> tuple:
     df = pd.read_csv(path)
     df.columns = df.columns.str.strip().str.lower()
 
-    required = ['timestamp'] + FEATURES
+    required = ['timestamp'] + RECORDED_FEATURES
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise ValueError(
             f"{os.path.basename(path)}: kolom {missing} tidak ada. "
-            "Rekam ulang memakai telext_v2.py (skema v2)."
+            "Rekam ulang memakai telext_v2.py (skema v2, dengan mod steertx aktif)."
         )
 
     df = df[required].apply(pd.to_numeric, errors='coerce')
@@ -67,6 +76,20 @@ def assign_segments(df: pd.DataFrame) -> pd.Series:
     return boundary.cumsum() - 1
 
 
+def add_steering_derivatives(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    steering_speed = d(steering)/dt, steering_accel = d(steering_speed)/dt,
+    dihitung PER SEGMEN pakai timestamp asli (df harus sudah terurut per
+    segmen+waktu dan punya kolom 'segment'). Baris pertama & kedua tiap
+    segmen tidak punya turunan penuh (NaN) -- dibuang oleh pemanggil.
+    """
+    df = df.sort_values(['segment', 'timestamp'])
+    dt = df.groupby('segment')['timestamp'].diff()
+    df['steering_speed'] = df.groupby('segment')['steering'].diff() / dt
+    df['steering_accel'] = df.groupby('segment')['steering_speed'].diff() / dt
+    return df
+
+
 def prepare_class(path: str, label: str, keep_fn, seg_offset: int) -> tuple:
     df, n_invalid = load_recording(path)
     n_loaded = len(df) + n_invalid
@@ -80,10 +103,19 @@ def prepare_class(path: str, label: str, keep_fn, seg_offset: int) -> tuple:
     df['segment'] = assign_segments(df) + seg_offset
     df['label'] = label
 
+    df = add_steering_derivatives(df)
+    n_deriv_nan = int(df[DERIVED_FEATURES].isna().any(axis=1).sum())
+    df = df.dropna(subset=DERIVED_FEATURES)
+    if df.empty:
+        raise ValueError(
+            f"{os.path.basename(path)}: semua baris hilang setelah hitung turunan steering "
+            "(segmen terlalu pendek?)."
+        )
+
     seg_len = df.groupby('segment').size()
     stats = {
         'label': label, 'loaded': n_loaded, 'invalid': n_invalid,
-        'filtered': n_filtered, 'kept': len(df),
+        'filtered': n_filtered, 'deriv_nan': n_deriv_nan, 'kept': len(df),
         'segments': len(seg_len),
         'seg_min': int(seg_len.min()), 'seg_med': int(seg_len.median()),
         'seg_max': int(seg_len.max()),
@@ -135,7 +167,8 @@ def merge_beamng_data(normal_path: str, racing_path: str, output_name: str = 'da
     print("STATS PEMBERSIHAN DATA:")
     for st in (st_n, st_r):
         print(f"  {st['label']:<7}: dimuat {st['loaded']:>6} | rusak {st['invalid']:>4} "
-              f"| terfilter {st['filtered']:>5} | dipakai {st['kept']:>6}")
+              f"| terfilter {st['filtered']:>5} | awal-segmen(turunan) {st['deriv_nan']:>3} "
+              f"| dipakai {st['kept']:>6}")
         print(f"           segmen {st['segments']:>3} "
               f"(panjang min/median/maks = {st['seg_min']}/{st['seg_med']}/{st['seg_max']} baris)")
     print(f"  Total  : {len(df_combined):>6} baris")

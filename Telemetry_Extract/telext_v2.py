@@ -1,20 +1,31 @@
 """
 telext_v2.py
-Merekam telemetri BeamNG.drive ke CSV dari DUA sumber UDP:
+Merekam telemetri BeamNG.drive ke CSV dari TIGA sumber UDP:
 
   - OutGauge (port 4444): speed, rpm, gear, throttle, brake
   - OutSim   (port 4123): akselerasi longitudinal/lateral dan yaw rate (sensor asli)
+                          CATATAN: struct di bawah ini masih asumsi gaya LFS/OutSim
+                          klasik, BELUM diverifikasi terhadap protokol MotionSim resmi
+                          BeamNG (beda struct, lihat dokumentasi). Belum diperbaiki —
+                          sengaja ditunda, lihat riwayat chat.
+  - steertx  (port bebas, lihat BeamNG_Mod/): steering, dari mod custom protocol
+             karena BeamNG tidak expose steering lewat OutGauge/MotionSim bawaan.
 
 Beda dari telext_advanced.py:
   - accel_ms2 diambil dari sensor OutSim, bukan turunan speed (lebih bersih).
   - Tambah accel_lat (gaya samping) dan yaw_rate (kecepatan putar body).
+  - Tambah steering (mentah) dari mod custom protocol steertx.
+    steering_speed & steering_accel TIDAK dihitung di sini — itu turunan yang
+    sensitif terhadap jitter, dihitung di Dataset.py pakai timestamp asli per
+    segmen (lihat komentar di sana), bukan di recorder ini.
   - Perekaman dipicu jam tetap (default 10 Hz), bukan waktu tiba paket.
   - jerk dihapus (tidak dipakai training, hanya menambah noise).
 
-Aktifkan dulu di BeamNG.drive: Options > Other > OutGauge dan OutSim
-(IP 127.0.0.1, port sesuai konstanta di bawah).
+Aktifkan dulu di BeamNG.drive: Options > Other > Protocols > OutGauge, MotionSim,
+dan steertx (steertx baru muncul setelah mod BeamNG_Mod/steertx/ dipasang dan
+vehicle Lua di-reload dengan Ctrl+R). IP 127.0.0.1, port sesuai konstanta di bawah.
 
-Mode probe untuk memverifikasi layout paket OutSim di mesin kamu:
+Mode probe untuk memverifikasi layout paket & field steering mana yang hidup:
     python telext_v2.py --probe
 """
 
@@ -32,6 +43,7 @@ import time
 # ============================================================
 OUTGAUGE_ADDR = ('127.0.0.1', 4444)
 OUTSIM_ADDR   = ('127.0.0.1', 4123)
+STEER_ADDR    = ('127.0.0.1', 4124)  # samakan dgn port "steertx" di Options > Other > Protocols
 CSV_FILE      = 'Extracted_v2.csv'
 RATE_HZ       = 10.0
 STALE_S       = 0.5     # paket lebih tua dari ini dianggap tidak ada
@@ -43,11 +55,17 @@ ACCEL_LON_AXIS, ACCEL_LON_SIGN = 1, 1.0
 ACCEL_LAT_AXIS, ACCEL_LAT_SIGN = 0, 1.0
 YAW_AXIS,       YAW_SIGN       = 2, 1.0
 
+# Mod steertx mengirim 2 kandidat field steering sekaligus karena nama field
+# electrics yang benar belum pasti. Cek --probe: putar setir di game, lihat
+# mana yang berubah mengikuti arah putar, lalu set salah satu di sini.
+STEER_FIELD = 'steering'   # ganti ke 'steeringInput' kalau itu yang hidup
+
 FIELDS = ['timestamp', 'car', 'speed_kmh', 'rpm', 'gear',
-          'throttle', 'brake', 'accel_ms2', 'accel_lat', 'yaw_rate']
+          'throttle', 'brake', 'accel_ms2', 'accel_lat', 'yaw_rate', 'steering']
 
 OUTSIM_MIN_LEN   = 52   # uint time + 12 float
 OUTGAUGE_MIN_LEN = 56   # sampai field brake
+STEER_MIN_LEN    = 16   # uint time + 3 float (steering, steeringInput, wheelspeed)
 
 
 # ============================================================
@@ -82,6 +100,13 @@ def parse_outsim(data: bytes) -> dict:
     }
 
 
+def parse_steer(data: bytes) -> dict:
+    # uint time, float steering, float steeringInput, float wheelspeed (lihat steertx.lua)
+    _t, steering, steering_input, _wheelspeed = struct.unpack_from('<I3f', data, 0)
+    value = steering if STEER_FIELD == 'steering' else steering_input
+    return {'steering': round(value, 4)}
+
+
 def make_socket(addr) -> socket.socket:
     s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     s.bind(addr)
@@ -95,11 +120,15 @@ def make_socket(addr) -> socket.socket:
 def probe():
     g_sock = make_socket(OUTGAUGE_ADDR)
     s_sock = make_socket(OUTSIM_ADDR)
-    print('PROBE: gas/rem/belok di game, lihat sumbu mana yang berubah. Ctrl+C untuk berhenti.\n')
+    st_sock = make_socket(STEER_ADDR)
+    print('PROBE: gas/rem/belok di game, lihat sumbu & field mana yang berubah.')
+    print('Khusus steertx: putar setir ke kiri/kanan, lihat "steering" vs "steeringInput"')
+    print('yang ikut berubah tanda/besarannya — itu yang benar, set STEER_FIELD ke situ.')
+    print('Ctrl+C untuk berhenti.\n')
     last = 0.0
     try:
         while True:
-            ready, _, _ = select.select([g_sock, s_sock], [], [], 0.2)
+            ready, _, _ = select.select([g_sock, s_sock, st_sock], [], [], 0.2)
             for s in ready:
                 raw, _ = s.recvfrom(1024)
                 now = time.perf_counter()
@@ -117,11 +146,17 @@ def probe():
                     d = parse_outgauge(raw)
                     print(f"OutGauge len={len(raw)} {d['speed_kmh']} km/h "
                           f"rpm={d['rpm']} thr={d['throttle']} brk={d['brake']}")
+                elif s is st_sock and len(raw) >= STEER_MIN_LEN:
+                    _t, steering, steering_input, wheelspeed = struct.unpack_from('<I3f', raw, 0)
+                    last = now
+                    print(f'steertx len={len(raw)}  steering={steering:8.4f}  '
+                          f'steeringInput={steering_input:8.4f}  wheelspeed={wheelspeed:6.2f}')
     except KeyboardInterrupt:
         print('\nProbe selesai.')
     finally:
         g_sock.close()
         s_sock.close()
+        st_sock.close()
 
 
 
@@ -142,10 +177,11 @@ def record():
     check_header(CSV_FILE)
     g_sock = make_socket(OUTGAUGE_ADDR)
     s_sock = make_socket(OUTSIM_ADDR)
+    st_sock = make_socket(STEER_ADDR)
 
     interval    = 1.0 / RATE_HZ
-    latest_g    = latest_s = None
-    t_g = t_s   = 0.0
+    latest_g    = latest_s = latest_st = None
+    t_g = t_s = t_st = 0.0
     next_tick   = time.perf_counter() + interval
     saved = skipped = 0
     is_new = not os.path.isfile(CSV_FILE) or os.path.getsize(CSV_FILE) == 0
@@ -160,7 +196,7 @@ def record():
         try:
             while True:
                 timeout = max(0.0, next_tick - time.perf_counter())
-                ready, _, _ = select.select([g_sock, s_sock], [], [], timeout)
+                ready, _, _ = select.select([g_sock, s_sock, st_sock], [], [], timeout)
 
                 for s in ready:
                     raw, _ = s.recvfrom(1024)
@@ -169,31 +205,35 @@ def record():
                         latest_g, t_g = parse_outgauge(raw), now
                     elif s is s_sock and len(raw) >= OUTSIM_MIN_LEN:
                         latest_s, t_s = parse_outsim(raw), now
+                    elif s is st_sock and len(raw) >= STEER_MIN_LEN:
+                        latest_st, t_st = parse_steer(raw), now
 
                 now = time.perf_counter()
                 if now < next_tick:
                     continue
                 next_tick = now + interval if now - next_tick > interval else next_tick + interval
 
-                if latest_g is None or latest_s is None \
-                        or now - t_g > STALE_S or now - t_s > STALE_S:
+                if latest_g is None or latest_s is None or latest_st is None \
+                        or now - t_g > STALE_S or now - t_s > STALE_S or now - t_st > STALE_S:
                     skipped += 1
-                    print(f'\rMenunggu OutGauge+OutSim... (dilewati: {skipped})', end='', flush=True)
+                    print(f'\rMenunggu OutGauge+OutSim+steertx... (dilewati: {skipped})', end='', flush=True)
                     continue
 
-                row = {'timestamp': round(time.time(), 6), **latest_g, **latest_s}
+                row = {'timestamp': round(time.time(), 6), **latest_g, **latest_s, **latest_st}
                 writer.writerow(row)
                 saved += 1
                 print(f"\rSAVED {saved:>6} | {row['speed_kmh']:>6.1f} km/h"
                       f" | GAS {row['throttle']:>5.1f}%"
                       f" | LON {row['accel_ms2']:>6.2f}"
-                      f" | LAT {row['accel_lat']:>6.2f}", end='', flush=True)
+                      f" | LAT {row['accel_lat']:>6.2f}"
+                      f" | STEER {row['steering']:>6.3f}", end='', flush=True)
 
         except KeyboardInterrupt:
             print(f'\nBerhenti. {saved} baris tersimpan di {CSV_FILE}.')
         finally:
             g_sock.close()
             s_sock.close()
+            st_sock.close()
 
 
 def main():
