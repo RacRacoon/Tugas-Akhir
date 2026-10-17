@@ -66,16 +66,24 @@ RATE_HZ        = 10.0
 STALE_S        = 0.5     # paket lebih tua dari ini dianggap tidak ada
 
 # Pemetaan sumbu MotionSim (indeks 0..2 pada vektor acc / angVel).
-# accY = longitudinal (+ saat gas) dan accX = lateral sudah diverifikasi lewat
-# --probe. Tanda lateral & yaw (kiri vs kanan) belum -- cek dengan --probe
-# sambil belok kiri lalu kanan. Untuk klasifikasi tanda ini tidak kritis
-# (model belajar pola, bukan arah), tapi harus KONSISTEN antar rekaman.
+# Diverifikasi lewat --probe di game:
+#   - acc dalam frame MOBIL (lokal): accY = longitudinal (+ gas, - rem),
+#     accX = lateral, konsisten walau arah hadap (yawPos) berubah.
+#     vel justru frame DUNIA (ikut berputar saat belok) -- tidak dipakai.
+#   - yawVel (ang_vel[2]) dalam rad/s, = d(yawPos)/dt, dan |accX| ~ v*|yawVel|
+#     dengan tanda sama -> pasangan lateral & yaw konsisten secara fisik.
+# Arah kiri/kanan absolut tidak penting untuk klasifikasi (model belajar pola),
+# yang penting KONSISTEN antar rekaman & inferensi -- jangan ubah tanda di sini
+# setelah mulai merekam dataset.
 ACCEL_LON_AXIS, ACCEL_LON_SIGN = 1, 1.0
 ACCEL_LAT_AXIS, ACCEL_LAT_SIGN = 0, 1.0
 YAW_AXIS,       YAW_SIGN       = 2, 1.0
 
 # Estimasi steering (bicycle model) -- lihat docstring modul.
-WHEELBASE_M   = 2.7   # meter. PLACEHOLDER -- ganti sesuai mobil yang dipakai rekam.
+# Untuk sudut kecil atan(x) ~ x, jadi WHEELBASE_M praktis cuma faktor skala --
+# dan StandardScaler di training menghapus skala. Nilai persisnya tidak kritis;
+# yang WAJIB: sama di semua rekaman & saat inferensi.
+WHEELBASE_M   = 2.7   # meter
 MIN_SPEED_EST = 0.5   # m/s, floor penyebut biar gak div-by-zero saat nyaris diam
 
 FIELDS = ['timestamp', 'car', 'speed_kmh', 'rpm', 'gear',
