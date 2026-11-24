@@ -1,0 +1,28 @@
+% !TEX root = ../main.tex
+\chapter*{ABSTRACT}
+\begin{center}
+  \large
+  \textbf{CLASSIFICATION OF AGGRESSIVE DRIVER BEHAVIOR IN VEHICLES BASED ON OBD-II TELEMETRY USING CNN-BILSTM AND PRELU}
+\end{center}
+\addcontentsline{toc}{chapter}{ABSTRACT}
+% Menyembunyikan nomor halaman
+\thispagestyle{empty}
+
+\begin{flushleft}
+  \setlength{\tabcolsep}{0pt}
+  \bfseries
+  \begin{tabular}{lc@{\hspace{6pt}}l}
+  Student Name / NRP&: &Sultan Syafiq Rakan / 5024231009\\
+  Department&: &Computer Engineering FTEIC - ITS\\
+  Advisor&: &Dr. Ahmad Zaini, S.T., M.Sc.\\
+  \end{tabular}
+  \vspace{4ex}
+\end{flushleft}
+\textbf{Abstract}
+
+% Isi Abstrak
+Aggressive or reckless driving is one of the main causes of traffic accidents, so a system that recognizes this behavior as it happens is needed. Camera-based detection carries a heavy computational load and can only monitor road sections where cameras are installed, while monitoring based on vehicle data still relies on manually defined rules and thresholds. This research proposes driver behavior classification from vehicle telemetry using a hybrid Convolutional Neural Network and Bidirectional Long Short-Term Memory (CNN-BiLSTM) architecture with the Parametric Rectified Linear Unit (PReLU) activation function. Training data are collected from the BeamNG.drive simulator through the OutGauge UDP protocol, from normal and reckless driving sessions by several drivers, because recording reckless driving on public roads is dangerous. The model is then tested on a real car whose data are read from the OBD-II port with an ELM327 WiFi adapter in a closed area. To work on both data sources, the model uses four core features available in the simulator and in the car: speed, engine speed, throttle position, and longitudinal acceleration computed from the change in speed. The sampling rate and speed resolution of the simulator data are matched to the OBD-II data, and the data are then normalized with Z-score and cut into three-second windows. The training, validation, and test sets are split per block so that overlapping windows do not leak into the test set. The convolutional layer extracts short-term patterns, and the BiLSTM and LSTM layers then summarize the sequence of patterns within a window. PReLU learns its negative slope during training, which is expected to prevent dying ReLU. The model is evaluated using accuracy, precision, recall, F1-score, AUC, inference latency, and detection time, both in the simulator and in the car. A preliminary simulator experiment with eleven features, one session per class, and one driver achieved 97.2\% accuracy and a reckless-class recall of 1.00 on the test set. This result does not yet measure generalization, because the training and test data still come from the same session. This research is expected to provide a basis for a real-time driver behavior monitoring system based on OBD-II.
+
+\vspace{2ex}
+\noindent
+\textbf{Keywords: \emph{CNN-BiLSTM, PReLU, OBD-II, BeamNG.drive, Aggressive Driving Behavior}}

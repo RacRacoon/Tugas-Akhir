@@ -1,0 +1,69 @@
+% !TEX root = ../main.tex
+\chapter{PENDAHULUAN}
+
+\section{Latar Belakang}
+
+Jalan raya merupakan fasilitas umum yang dipakai masyarakat untuk bertransportasi setiap hari. Kelalaian pengemudi di jalan raya dapat merenggut nyawa dan menimbulkan kerugian materi. Laporan \textit{World Health Organization} (WHO) menyatakan bahwa sekitar 1,16 juta orang meninggal setiap tahun akibat kecelakaan lalu lintas di seluruh dunia \cite{WHO2026}. Di Indonesia, Pusat Informasi Kriminal Nasional (Pusiknas) Bareskrim Polri mencatat 148.798 kecelakaan lalu lintas sepanjang tahun 2023 \cite{Databoks2024}. Jumlah produksi kendaraan juga terus meningkat dalam beberapa dekade terakhir \cite{Chauhan2020}. Semakin banyak kendaraan yang berbagi ruas jalan yang sama, semakin besar pula peluang terjadinya kecelakaan.
+
+Kesalahan manusia menjadi penyebab utama kecelakaan tersebut, yaitu 140.812 kasus atau 94,63\% dari seluruh kecelakaan pada tahun 2023 \cite{Databoks2024}. Faktor manusia yang paling sering terjadi antara lain lengah, mengantuk, tidak menjaga jarak, dan melaju dengan kecepatan tinggi \cite{Mubalus2023}. Perilaku ugal-ugalan mencakup kesalahan penilaian, pengoperasian kendaraan yang tidak tepat, sampai pengabaian rambu dan marka jalan \cite{Chauhan2020}. Perilaku ini tidak hanya membahayakan pengemudi, tetapi juga penumpang dan pengguna jalan lain \cite{Sutikno2025}. Proposal ini memakai istilah ugal-ugalan untuk perilaku mengemudi agresif yang dijelaskan pada Subbab~\ref{subsec:agresif}. Oleh karena itu, dibutuhkan sistem pemantauan yang bekerja secara \textit{real-time} untuk mendeteksi perilaku mengemudi berbahaya \cite{Heo2020}.
+
+Kebutuhan ini muncul pada pengelola armada kendaraan komersial, seperti taksi daring, yang perlu mengetahui mitra pengemudi yang berkendara secara berisiko. Sistem manajemen armada yang membaca data kendaraan melalui port OBD-II sudah dikembangkan untuk memantau kendaraan dari jarak jauh \cite{Malekian2017}. Di Indonesia, sistem pemantau pengemudi mobil rental berbasis OBD-II menilai perilaku pengemudi dengan aturan yang ditentukan sebelumnya \cite{Rahayu2021}.
+
+Penelitian sebelumnya mendeteksi perilaku berbahaya dengan beberapa metode. Salah satunya menganalisis lintasan kendaraan dari rekaman kamera \cite{Sutikno2025}. Kendaraan yang berpindah jalur berkali-kali dalam waktu singkat membentuk lintasan menyerupai huruf S, dan lintasan tersebut menjadi indikator perilaku ugal-ugalan \cite{Chauhan2020}. Namun, model deteksi berbasis citra membutuhkan sumber daya komputasi yang besar ketika dijalankan pada perangkat tertanam \cite{Heo2020}. Metode ini juga hanya dapat memantau ruas jalan yang terpasang kamera, padahal pemasangan kamera pengawas di seluruh kota membutuhkan biaya besar \cite{Chauhan2020}. Penelitian lain memakai akselerometer dengan aturan dan ambang batas yang ditentukan secara manual \cite{Boonmee2009}. Pendekatan berbasis ambang juga dipakai pada perangkat IMU berdaya komputasi rendah \cite{Khan2024}. Pramunanto dkk. mengembangkan prototipe pemantau perilaku pengemudi yang mengklasifikasi kejadian longitudinal dan lateral ke dalam kelas defensif, normal, dan agresif dengan metode Na\"{\i}ve Bayes \cite{Pramunanto2019}.
+
+Data kendaraan dapat menjadi alternatif dari pendekatan berbasis kamera. Akselerasi longitudinal dan lateral sudah cukup untuk mengenali pengereman mendadak, belokan tajam, dan akselerasi tiba-tiba dari kondisi berhenti \cite{Khan2024}. Telemetri kendaraan merekam masukan pengemudi, seperti kedalaman pedal gas, sekaligus respons kendaraan, seperti kecepatan dan putaran mesin. Data ini berbentuk deret waktu, dan \textit{Recurrent Neural Network} (RNN) sudah dipakai untuk menganalisis deret waktu kecepatan kendaraan dalam mendeteksi perilaku ugal-ugalan \cite{Thakuri2025}.
+
+\textit{Convolutional Neural Network} (CNN) mengekstrak fitur dari data mentah tanpa perancangan fitur secara manual \cite{LeCun1998}. Kemampuan ini cocok untuk mengenali pola sesaat, seperti lonjakan akselerasi atau penekanan pedal gas yang mendadak. Perilaku ugal-ugalan juga berupa rangkaian kejadian dalam beberapa detik, misalnya akselerasi keras yang diikuti pengereman. \textit{Long Short-Term Memory} (LSTM) dirancang untuk mempelajari ketergantungan seperti ini dalam data deret waktu \cite{Hochreiter1997}. Gabungan LSTM dan CNN telah dipakai untuk mengenali perilaku mengemudi abnormal dari data kendaraan nyata \cite{Jia2020}. Cura dkk. melatih LSTM dan 1D-CNN pada data CAN bus kendaraan dan mendapatkan bahwa 1D-CNN lebih baik dalam mengenali perilaku agresif \cite{Cura2021}. Oleh karena itu, penelitian ini menggabungkan CNN dengan \textit{Bidirectional} LSTM (BiLSTM) dalam satu arsitektur hibrida.
+
+Fungsi aktivasi menentukan cara setiap neuron meneruskan sinyal. \textit{Rectified Linear Unit} (ReLU) menolkan keluaran neuron yang jumlah berbobotnya negatif, sehingga sebagian neuron dapat berhenti belajar. Kondisi ini disebut \textit{dying ReLU} \cite{Maas2013}. \textit{Parametric Rectified Linear Unit} (PReLU) mempertahankan kemiringan kecil pada sisi negatif dan mempelajari besar kemiringan tersebut selama pelatihan \cite{He2015}. Penelitian ini memakai PReLU agar neuron tetap menerima sinyal pembelajaran ketika jumlah berbobotnya negatif.
+
+Merekam perilaku ugal-ugalan di jalan raya membahayakan pengemudi dan pengguna jalan lain. Oleh karena itu, penelitian ini memakai simulator BeamNG.drive untuk mengumpulkan data latih, karena simulator tersebut mengirim data kendaraan melalui protokol UDP bawaan \cite{BeamNGProtocols}. Model yang telah dilatih kemudian diuji pada mobil nyata dengan membaca data kendaraan dari port OBD-II memakai adaptor ELM327 \cite{ELM327}. Pengujian di mobil dilakukan di area tertutup dengan skenario agresif yang terkendali. Fitur model dibatasi pada data yang tersedia di simulator dan di mobil, yaitu kecepatan, putaran mesin, posisi \textit{throttle}, dan akselerasi longitudinal yang dihitung dari selisih kecepatan.
+
+\section{Rumusan Masalah}
+
+Berdasarkan latar belakang yang telah diuraikan, rumusan masalah dalam Tugas Akhir ini adalah sebagai berikut:
+\begin{enumerate}
+    \item Metode deteksi perilaku ugal-ugalan berbasis citra membutuhkan komputasi yang besar. Metode tersebut juga hanya dapat memantau ruas jalan yang terpasang kamera. Metode berbasis data kendaraan masih menilai perilaku dengan aturan atau ambang batas yang ditentukan sebelumnya. Ambang batas tersebut menilai setiap peristiwa secara terpisah, padahal perilaku ugal-ugalan berupa rangkaian kejadian dalam beberapa detik. Oleh karena itu, diperlukan rancangan dan implementasi arsitektur hibrida CNN-BiLSTM dengan fungsi aktivasi PReLU yang mengklasifikasi perilaku pengemudi langsung dari telemetri kendaraan yang tersedia melalui OBD-II.
+    \item Setelah normalisasi \textit{Z-score}, data telemetri tersebar di sekitar nol, sehingga banyak neuron pada lapisan konvolusi menerima jumlah berbobot yang negatif. ReLU menolkan keluaran neuron tersebut sehingga gradiennya hilang dan sebagian neuron dapat berhenti belajar sehingga terjadi \textit{dying ReLU}. Akurasi dan kinerja model CNN-BiLSTM dengan PReLU dalam mengklasifikasi perilaku pengemudi normal dan ugal-ugalan pada data simulator \textit{BeamNG.drive} belum diketahui.
+    \item Data latih berasal dari simulator, sedangkan pengujian dilakukan pada mobil nyata melalui adaptor ELM327. Kedua sumber data berbeda dalam laju cuplik, resolusi nilai, dan jumlah besaran yang tersedia. Kemampuan model yang dilatih dengan data simulator untuk mengklasifikasi perilaku pengemudi pada data OBD-II dari mobil nyata belum diketahui.
+\end{enumerate}
+
+\section{Batasan Masalah atau Ruang Lingkup}
+Penelitian ini dibatasi pada hal-hal berikut:
+\begin{enumerate}
+    \item Penelitian ini mengklasifikasi perilaku pengemudi ke dalam dua kelas, yaitu normal dan ugal-ugalan.
+    \item Kelas ugal-ugalan didefinisikan secara operasional melalui skenario rekaman, yaitu akselerasi dan pengereman mendadak, penahanan gigi rendah, belokan tajam, dan perpindahan jalur berulang. Penelitian ini tidak mengukur niat atau kondisi emosi pengemudi.
+    \item Data latih berasal dari simulator BeamNG.drive melalui protokol UDP OutGauge, dengan MotionSim sebagai data acuan untuk memeriksa akselerasi. Simulator dipilih karena alasan keamanan dan karena simulator menyediakan data fisika yang realistis pada skenario berbahaya.
+    \item Pengujian pada kendaraan nyata memakai satu mobil penumpang yang dapat menjadi kendaraan komersial seperti taksi. Data dibaca melalui adaptor ELM327 dengan koneksi WiFi, dan pengujian dilakukan di area tertutup dengan skenario agresif yang terkendali.
+    \item Model yang diimplementasikan adalah arsitektur hibrida CNN-BiLSTM dengan fungsi aktivasi PReLU. Masukan model berupa empat fitur inti, yaitu kecepatan, putaran mesin (RPM), posisi \textit{throttle}, dan akselerasi longitudinal yang dihitung dari selisih kecepatan. Besaran lain hanya ditambahkan jika tersedia di simulator dan pada PID mobil uji.
+    \item Penelitian ini tidak memakai IMU, sehingga manuver lateral seperti zig-zag dan perpindahan jalur tidak teramati secara langsung.
+    \item Data direkam oleh peneliti dan dua sampai tiga pengemudi lain dengan satu jenis transmisi. Hasil penelitian tidak mewakili seluruh populasi pengemudi.
+    \item Faktor eksternal di simulator, seperti cuaca, kepadatan lalu lintas, rambu, dan waktu, dibuat konstan agar evaluasi berfokus pada kemampuan algoritma membedakan gaya mengemudi normal dan ugal-ugalan.
+\end{enumerate}
+
+\section{Tujuan}
+
+Tujuan dari penelitian ini adalah sebagai berikut:
+\begin{enumerate}
+    \item Merancang dan mengimplementasikan arsitektur hibrida CNN-BiLSTM dengan aktivasi PReLU untuk mengklasifikasi perilaku pengemudi normal dan ugal-ugalan dari telemetri kendaraan.
+    \item Mengukur akurasi dan kinerja model CNN-BiLSTM dengan PReLU dalam mengklasifikasi perilaku pengemudi normal dan ugal-ugalan pada data simulator \textit{BeamNG.drive}.
+    \item Menguji model yang dilatih dengan data simulator pada mobil nyata melalui adaptor OBD-II ELM327.
+\end{enumerate}
+
+\section{Manfaat}
+
+Manfaat yang diharapkan dari penelitian Tugas Akhir ini adalah sebagai berikut:
+
+\subsection{Manfaat Praktis}
+\begin{enumerate}[label=\arabic*.]
+  \item \textbf{Meningkatkan Keselamatan Berkendara}: Menjadi dasar pengembangan sistem pemantauan yang memberi peringatan dini dan laporan tentang pengemudi yang berkendara secara berisiko.
+  \item \textbf{Penilaian Risiko Pengemudi}: Memberi alternatif bagi perusahaan asuransi kendaraan dan pengelola armada komersial untuk menilai profil risiko pengemudi dari data OBD-II. Pemantauan armada berbasis data OBD-II sudah diterapkan untuk menghitung jarak tempuh dan konsumsi bahan bakar \cite{Malekian2017}.
+  \item \textbf{Riset yang Aman dan Hemat Biaya}: Menunjukkan pemanfaatan simulator \textit{high-fidelity} seperti BeamNG.drive untuk mengumpulkan data latih, sehingga pengujian dengan mobil nyata hanya diperlukan pada tahap akhir dan di area yang aman.
+\end{enumerate}
+
+\subsection{Manfaat Teoretis}
+\begin{enumerate}[label=\arabic*.]
+  \item \textbf{Pengembangan Arsitektur \textit{Deep Learning}}: Menambah kajian tentang penerapan fungsi aktivasi PReLU pada arsitektur hibrida CNN-BiLSTM untuk data telemetri kendaraan.
+  \item \textbf{Dari Simulator ke Kendaraan Nyata}: Memberi gambaran tentang kemampuan model yang dilatih dengan data simulator ketika diterapkan pada data OBD-II dari mobil nyata.
+  \item \textbf{Referensi Akademis}: Menjadi rujukan bagi penelitian selanjutnya di bidang teknik komputer, khususnya sistem transportasi cerdas dan pengolahan data sensor dengan \textit{Deep Learning}.
+\end{enumerate}

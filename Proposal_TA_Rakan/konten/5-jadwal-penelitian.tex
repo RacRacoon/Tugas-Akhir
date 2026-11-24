@@ -1,0 +1,49 @@
+% !TEX root = ../main.tex
+\chapter{JADWAL PENELITIAN}
+
+% \G mengisi sel minggu kegiatan, \w mengosongkan sel
+\newcommand{\w}{}
+\newcommand{\G}{\cellcolor{gray}}
+\begin{table}[H]
+  \centering
+  \caption{Jadwal pelaksanaan penelitian}
+  \label{tbl:timeline}
+  \small
+  \setlength{\tabcolsep}{3pt}
+  \begin{tabular}{|p{4.2cm}|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|c|}
+    \hline
+    \multirow{2}{*}{Kegiatan} & \multicolumn{16}{c|}{Minggu} \\
+    \cline{2-17}
+     & 1 & 2 & 3 & 4 & 5 & 6 & 7 & 8 & 9 & 10 & 11 & 12 & 13 & 14 & 15 & 16 \\
+    \hline
+    Uji coba ELM327 dan pemeriksaan PID mobil
+     & \G & \G & \w & \w & \w & \w & \w & \w & \w & \w & \w & \w & \w & \w & \w & \w \\
+    \hline
+    Perekaman sesi simulator dari beberapa pengemudi
+     & \G & \G & \G & \G & \w & \w & \w & \w & \w & \w & \w & \w & \w & \w & \w & \w \\
+    \hline
+    \textit{Preprocessing} dan penyesuaian fitur
+     & \w & \w & \G & \G & \G & \w & \w & \w & \w & \w & \w & \w & \w & \w & \w & \w \\
+    \hline
+    \textit{Training} dan optimisasi model
+     & \w & \w & \w & \w & \G & \G & \G & \G & \w & \w & \w & \w & \w & \w & \w & \w \\
+    \hline
+    Ablasi dan analisis fitur
+     & \w & \w & \w & \w & \w & \w & \w & \G & \G & \w & \w & \w & \w & \w & \w & \w \\
+    \hline
+    Pengujian \textit{real-time} pada BeamNG
+     & \w & \w & \w & \w & \w & \w & \w & \w & \G & \G & \w & \w & \w & \w & \w & \w \\
+    \hline
+    Pengujian pada mobil melalui OBD-II
+     & \w & \w & \w & \w & \w & \w & \w & \w & \w & \w & \G & \G & \G & \w & \w & \w \\
+    \hline
+    Evaluasi dan perbaikan sistem
+     & \w & \w & \w & \w & \w & \w & \w & \w & \w & \w & \w & \G & \G & \G & \w & \w \\
+    \hline
+    Penulisan buku Tugas Akhir
+     & \w & \w & \w & \w & \w & \w & \w & \w & \G & \G & \G & \G & \G & \G & \G & \G \\
+    \hline
+  \end{tabular}
+\end{table}
+
+Tabel~\ref{tbl:timeline} menunjukkan rencana pelaksanaan penelitian selama 16 minggu. Dua minggu pertama dipakai untuk mencoba adaptor ELM327 pada mobil uji, memeriksa PID yang didukung, dan mengukur laju cuplik. Perekaman sesi simulator dari peneliti dan dua sampai tiga pengemudi lain berjalan pada empat minggu pertama. \textit{Preprocessing} dimulai pada minggu ketiga, setelah laju cuplik mobil diketahui, agar data simulator dapat langsung disesuaikan. \textit{Training} dan optimisasi model berlangsung pada minggu kelima sampai kedelapan, lalu dilanjutkan dengan ablasi dan analisis fitur. Pengujian \textit{real-time} di BeamNG dijalankan pada minggu kesembilan dan kesepuluh, dan pengujian pada mobil di area tertutup dijalankan pada minggu kesebelas sampai ketiga belas. Jika model belum memenuhi kriteria pada Tabel~\ref{tab:kriteria}, minggu kedua belas sampai keempat belas dipakai untuk memperbaiki sistem sesuai alur pada Gambar~\ref{fig:urutan}. Penulisan buku Tugas Akhir dimulai pada minggu kesembilan dan berjalan bersamaan dengan tahap pengujian.

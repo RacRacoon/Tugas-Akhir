@@ -1,0 +1,329 @@
+% !TEX root = ../main.tex
+\chapter{METODOLOGI}
+
+\section{Metode yang digunakan}
+Penelitian ini menggunakan metode eksperimental. Pendekatan eksperimental dipilih untuk merancang, melatih, mengevaluasi, dan memperbaiki model klasifikasi perilaku pengemudi berbasis data telemetri kendaraan. Data latih dikumpulkan dari sesi mengemudi pada simulator BeamNG.drive dengan dua skenario, yaitu mengemudi normal dan mengemudi ugal-ugalan. Label setiap data ditentukan oleh skenario yang sedang dijalankan saat data direkam. Model yang telah dilatih kemudian diuji pada dua lingkungan, yaitu simulator dan mobil nyata yang datanya dibaca melalui adaptor OBD-II ELM327.
+
+Variabel bebas pada eksperimen ini adalah kombinasi fitur masukan yang diuji melalui ablasi fitur. Variabel terikatnya adalah kinerja klasifikasi dan latensi inferensi. Variabel kontrolnya adalah arsitektur model dengan aktivasi PReLU, data latih, \textit{hyperparameter}, \textit{seed} acak, kendaraan, mode transmisi, serta kondisi lingkungan simulasi. Kinerja diukur secara kuantitatif dengan akurasi, presisi, \textit{recall}, \textit{F1-score}, AUC, dan latensi inferensi pada data uji, pengujian \textit{real-time} di simulator, dan pengujian pada mobil.
+
+\section{Bahan dan peralatan yang digunakan}
+Untuk merealisasikan sistem deteksi gaya berkendara berbahaya (ugal-ugalan) yang diusulkan, dibutuhkan komponen perangkat keras serta perangkat lunak sebagai berikut:
+
+\subsection{Perangkat Keras (\textit{Hardware})}
+\begin{enumerate}[label=\arabic*)]
+  \item \textbf{Komputer Simulator}: PC spesifikasi tinggi yang menjalankan simulator BeamNG.drive, program perekam telemetri, proses pelatihan model, dan program klasifikasi \textit{real-time}.
+  \item \textbf{\textit{Driving Simulator}}: Rangkaian set kemudi fisik (\textit{steering wheel}) dan pedal (\textit{throttle}, \textit{brake}) yang berfungsi sebagai perangkat masukan mekanis bagi pengemudi untuk mengendalikan kendaraan di dalam simulator secara realistis.
+  \item \textbf{Adaptor ELM327 WiFi}: Adaptor yang dipasang pada port OBD-II mobil uji dan mengirim data kendaraan ke laptop melalui jaringan WiFi.
+  \item \textbf{Mobil Uji}: Satu mobil penumpang dengan port OBD-II dan jenis transmisi yang sama dengan kendaraan di simulator.
+  \item \textbf{Laptop}: Laptop yang menjalankan program klasifikasi di dalam mobil saat pengujian.
+\end{enumerate}
+
+\subsection{Perangkat Lunak (\textit{Software})}
+\begin{enumerate}[label=\arabic*), nosep, leftmargin=1.5em]
+  \item \textbf{Sistem Operasi}: Windows 11 untuk menjalankan BeamNG.drive dan program Python secara bersamaan.
+  \item \textbf{Perangkat Lunak Simulasi}: BeamNG.drive versi 0.39 sebagai simulator \textit{high-fidelity} dengan mesin fisika \textit{soft-body} yang menghasilkan dinamika kendaraan dan data telemetri.
+  \item \textbf{Protokol Telemetri Simulator}: OutGauge dan MotionSim, yaitu protokol UDP bawaan BeamNG.drive yang mengirim data kendaraan ke program Python melalui alamat \textit{localhost}.
+  \item \textbf{Koneksi OBD-II}: Koneksi TCP dari program Python ke adaptor ELM327 melalui WiFi untuk mengirim permintaan PID dan menerima jawabannya.
+  \item \textbf{Bahasa Pemrograman}: Python 3.11.
+  \item \textbf{Pustaka dan Kerangka Kerja (\textit{Library \& Framework})}:
+  \begin{enumerate}[label=\alph*), nosep, leftmargin=1.5em]
+    \item \textbf{TensorFlow 2.21 dan Keras 3}: Merancang arsitektur hibrida CNN-BiLSTM dengan fungsi aktivasi PReLU, melatih, dan menjalankan inferensi model.
+    \item \textbf{scikit-learn}: Normalisasi \textit{Z-score}, pengodean label, serta perhitungan \textit{confusion matrix} dan laporan klasifikasi.
+    \item \textbf{Pandas dan NumPy}: Pembersihan data, segmentasi, \textit{resampling}, perhitungan akselerasi, dan pembentukan \textit{sliding window}.
+    \item \textbf{Matplotlib dan Seaborn}: Visualisasi kurva pelatihan dan \textit{confusion matrix}.
+  \end{enumerate}
+\end{enumerate}
+
+\section{Urutan Pelaksanaan Penelitian}
+Pelaksanaan penelitian ini dibagi menjadi beberapa tahapan yang saling berurutan, mulai dari pengkajian penelitian terdahulu hingga evaluasi model. Alur kerja penelitian diilustrasikan pada Gambar~\ref{fig:urutan} dan dijelaskan pada setiap subbab berikut.
+\begin{figure}[H]
+  \centering
+  \begin{tikzpicture}[
+      node distance=3mm,
+      langkah/.style={draw, rounded corners=3pt, minimum width=7.4cm, minimum height=6.2mm, align=center, font=\small},
+      putusan/.style={draw, diamond, aspect=2.6, inner sep=1pt, align=center, font=\small},
+      titik/.style={circle, fill=black, minimum size=3.5mm, inner sep=0pt},
+      panah/.style={-{Stealth[length=2mm]}}]
+    \node[titik] (mulai) {};
+    \node[langkah, below=of mulai] (s1) {1. Pengkajian penelitian terdahulu};
+    \node[langkah, below=of s1] (s2) {2. Penentuan parameter yang diambil};
+    \node[langkah, below=of s2] (s3) {3. Pengambilan dataset telemetri di simulator};
+    \node[langkah, below=of s3] (s4) {4. Ekstraksi fitur dan \textit{preprocessing}};
+    \node[langkah, below=of s4] (s5) {5. Pembuatan algoritma CNN-BiLSTM dengan PReLU};
+    \node[langkah, below=of s5] (s6) {6. \textit{Training} dan optimisasi model};
+    \node[langkah, below=of s6] (s7) {7. \textit{Testing} pada BeamNG secara \textit{real-time}};
+    \node[langkah, below=of s7] (s8) {8. \textit{Testing} pada mobil melalui OBD-II};
+    \node[langkah, below=of s8] (s9) {9. Evaluasi model};
+    \node[putusan, below=of s9] (cek) {Memenuhi\\kriteria?};
+    \node[langkah, minimum width=3.2cm, below=of cek] (final) {Model final};
+    \node[langkah, minimum width=3.2cm, right=12mm of cek] (perbaikan) {Perbaikan sistem};
+    \node[titik, below=of final] (selesai) {};
+    \node[circle, draw, minimum size=5mm, inner sep=0pt] at (selesai) {};
+    \foreach \a/\b in {mulai/s1, s1/s2, s2/s3, s3/s4, s4/s5, s5/s6, s6/s7, s7/s8, s8/s9, s9/cek, final/selesai}
+      \draw[panah] (\a) -- (\b);
+    \draw[panah] (cek) -- node[right, font=\small] {Ya} (final);
+    \draw[panah] (cek) -- node[above, font=\small] {Tidak} (perbaikan);
+    \draw[panah] (perbaikan) |- (s6);
+  \end{tikzpicture}
+  \caption{\emph{Flowchart} penelitian yang akan dilakukan}
+  \label{fig:urutan}
+\end{figure}
+
+\subsection{Pengkajian Penelitian Terdahulu}
+Tahap pertama penelitian ini adalah mengkaji penelitian terdahulu sebagai landasan dan acuan arah penelitian. Pada tahap ini, peneliti mengumpulkan parameter yang dipakai untuk mengklasifikasi gaya berkendara. Parameter yang diperoleh adalah kecepatan, akselerasi dan deselerasi, akselerasi lateral, putaran mesin (RPM), posisi \textit{throttle}, serta kedalaman pedal rem. Muhamad Fadzil dkk. memakai putaran mesin, kecepatan, posisi \textit{throttle}, dan beban mesin dari OBD-II, sedangkan Rahayu memakai putaran mesin, kecepatan, beban mesin, dan suhu mesin. Akselerasi lateral memerlukan sensor gerak, seperti pada penelitian Carmona dkk. dan Singh dan Sharma.
+
+\subsection{Penentuan Parameter dalam Penelitian}
+Pada tahap ini ditentukan parameter yang menjadi masukan model. Parameter dipilih berdasarkan dua pertimbangan, yaitu relevansinya dengan indikator perilaku ugal-ugalan pada BAB II dan ketersediaannya di simulator dan di mobil uji. Model yang dilatih di simulator harus menerima fitur yang sama ketika diuji di mobil. Oleh karena itu, penelitian ini memakai empat fitur inti pada Tabel~\ref{tab:fitur}.
+
+\begin{table}[H]
+  \centering
+  \caption{Fitur inti masukan model}
+  \label{tab:fitur}
+  \small
+  \begin{tabular}{|c|l|l|l|c|}
+    \hline
+    \textbf{No.} & \textbf{Fitur} & \textbf{Simulator} & \textbf{Mobil (OBD-II)} & \textbf{Satuan} \\
+    \hline
+    1 & Kecepatan & OutGauge (\textit{speed}) & mode 01, PID 0D & km/jam \\
+    \hline
+    2 & Putaran mesin & OutGauge (\textit{rpm}) & mode 01, PID 0C & rpm \\
+    \hline
+    3 & Posisi \textit{throttle} & OutGauge (\textit{throttle}) & mode 01, PID 11 & \% \\
+    \hline
+    4 & Akselerasi longitudinal & selisih kecepatan & selisih kecepatan & m/s$^{2}$ \\
+    \hline
+  \end{tabular}
+\end{table}
+
+Akselerasi longitudinal dihitung dari selisih kecepatan dengan cara yang sama pada simulator dan mobil, lalu diratakan dengan Persamaan~\ref{eq:moving-average}. Kecepatan dari simulator dibulatkan ke km/jam bulat sebelum akselerasi dihitung, agar resolusinya sama dengan kecepatan dari OBD-II. Akselerasi dari MotionSim tidak menjadi masukan model. Nilai tersebut dipakai untuk memeriksa apakah akselerasi hasil selisih kecepatan mengikuti akselerasi yang dihitung mesin fisika simulator. Pengujian awal terhadap paket MotionSim menunjukkan bahwa akselerasi dinyatakan dalam sistem koordinat kendaraan. Komponen sumbu Y bernilai positif saat pedal gas ditekan dan negatif saat pengereman.
+
+Sebelum pengambilan data mobil, program meminta PID 00, 20, dan 40 pada mode 01 untuk mengetahui PID yang didukung mobil uji. Jika mobil mendukung PID posisi pedal akselerator (PID 49), PID tersebut menggantikan PID 11 karena lebih setara dengan kedalaman pedal gas di simulator. Jika mobil juga menyediakan posisi gigi atau kedalaman pedal rem, besaran tersebut dapat ditambahkan sebagai fitur pada simulator dan mobil, lalu model dilatih ulang.
+
+\subsection{Pengambilan Dataset Telemetri}
+Data latih diekstrak dari simulator melalui protokol OutGauge (port 4444) dan MotionSim (port 4123) pada alamat \textit{localhost}. Program perekam Python membuka dua \textit{socket} UDP dan menyimpan paket terbaru dari setiap protokol. Paket MotionSim divalidasi dengan memeriksa penanda \texttt{"BNG1"} dan panjang paket 88 \textit{byte}. Pada setiap detak jam 10~Hz, program menggabungkan paket terbaru dari kedua protokol lalu menulis satu baris ke berkas \texttt{.csv}. Jika paket dari salah satu protokol lebih tua dari 0,5~s, baris tersebut dilewati agar tidak ada baris yang memuat data basi.
+
+Data direkam oleh peneliti dan dua sampai tiga pengemudi lain. Setiap pengemudi menjalankan beberapa sesi untuk setiap kelas dengan kriteria yang sama, dan setiap sesi berdurasi paling lama 15 menit untuk menjaga fokus pengemudi. Pada sesi normal, pengemudi berkendara dengan kecepatan wajar, perpindahan gigi yang halus, serta akselerasi dan pengereman yang lembut. Pada sesi ugal-ugalan, pengemudi melakukan akselerasi dan pengereman mendadak, menahan gigi rendah, berbelok tajam, serta berpindah jalur berulang kali.
+
+Sesi ugal-ugalan dapat memuat potongan yang tampak normal, misalnya saat kendaraan berbelok pelan di tikungan. Untuk mengurangi label yang keliru, pengemudi mempertahankan pola mengemudi agresif sepanjang sesi. Penyaringan kecepatan di bawah 15~km/jam juga membuang cuplikan saat kendaraan nyaris diam. Jendela yang salah diklasifikasi pada data uji diperiksa ulang untuk melihat apakah kesalahan berasal dari model atau dari label.
+
+Kendaraan, mode transmisi, peta, cuaca, dan waktu dibuat sama untuk kedua kelas agar perbedaan data hanya berasal dari perilaku pengemudi. Rekaman dihentikan jika terjadi tabrakan, karena lonjakan akselerasi akibat benturan bukan bagian dari perilaku mengemudi. Setiap kelas ditargetkan memiliki tiga sampai lima sesi dengan rute yang berbeda. Data uji diambil dari sesi yang tidak dipakai saat pelatihan, dan bila memungkinkan dari pengemudi yang datanya tidak dipakai saat pelatihan. Hasil pendahuluan pada BAB IV masih berasal dari satu pengemudi, yaitu peneliti.
+
+Rekaman setiap kelas disimpan dalam berkas \texttt{.csv} terpisah, yaitu \texttt{Normal.csv} untuk kelas normal dan \texttt{Ugal.csv} untuk kelas ugal-ugalan, lalu digabungkan pada tahap berikutnya.
+
+\subsection{Ekstraksi Fitur dan \textit{Preprocessing}}
+Data mentah yang terkumpul kemudian memasuki tahap ekstraksi fitur dan \textit{preprocessing} sebelum digunakan sebagai masukan model. Tahapan yang dilakukan meliputi:
+\begin{enumerate}
+    \item \textbf{Validasi skema dan pembersihan data:} Setiap berkas diperiksa kelengkapan kolomnya. Baris yang mengandung nilai kosong atau tidak hingga dihapus.
+    \item \textbf{Penyaringan netral:} Baris dengan kecepatan di bawah 15 km/jam dibuang dari kedua kelas, karena kendaraan yang diam atau hampir diam tidak memperlihatkan gaya mengemudi. Tidak ada filter yang hanya diterapkan pada satu kelas. Pada percobaan awal, kelas normal disaring dengan batas RPM, kedalaman pedal gas, dan kecepatan. Filter tersebut dihapus karena membuat model dapat membedakan kelas hanya dengan mengenali batas filter, seperti yang dijelaskan pada BAB II.
+    \item \textbf{Segmentasi:} Rekaman dipotong menjadi segmen-segmen yang barisnya berurutan. Segmen baru dimulai jika ada baris yang dibuang, waktu mundur, atau selisih waktu antarbaris melebihi 1~s. Setiap segmen hanya berisi satu kelas.
+    \item \textbf{\textit{Resampling}:} Data simulator di dalam setiap segmen di-\textit{resample} dari 10~Hz ke laju cuplik mobil $f_{s}$ yang diukur pada Subbab~\ref{subsec:uji-mobil}.
+    \item \textbf{Perhitungan akselerasi:} Kecepatan dibulatkan ke km/jam bulat, lalu akselerasi longitudinal dihitung dari selisih kecepatan dan diratakan dengan Persamaan~\ref{eq:moving-average}. Beberapa baris pertama setiap segmen tidak memiliki nilai rata-rata lengkap dan dibuang.
+    \item \textbf{Pemotongan nilai ekstrem:} Nilai akselerasi longitudinal dipotong pada $\pm 15$~m/s$^{2}$.
+    \item \textbf{Pembagian dataset per blok:} Setiap segmen dipotong menjadi blok berdurasi sekitar 20~s. Blok dari setiap kelas diacak lalu dibagi menjadi 70\% data latih, 15\% data validasi, dan 15\% data uji. Pembagian per blok dan per kelas mencegah kebocoran data antarjendela yang tumpang tindih sekaligus menjaga proporsi kelas.
+    \item \textbf{Pembuatan \textit{sliding window}:} Jendela berdurasi 3~s dengan pergeseran 0,5~s dibuat di dalam setiap blok. Dalam cuplikan, ukuran jendela adalah $W = 3 f_{s}$ dan pergeserannya adalah $S = 0{,}5 f_{s}$ yang dibulatkan. Setiap jendela berbentuk matriks $W \times 4$ dan diberi label sesuai kelas bloknya.
+    \item \textbf{Normalisasi data:} Rata-rata $\mu$ dan simpangan baku $\sigma$ setiap fitur dihitung dari data latih, lalu dipakai untuk menormalisasi data latih, validasi, uji, data \textit{real-time} simulator, dan data mobil dengan \textit{Z-score} (Persamaan~\ref{eq:zscore}).
+\end{enumerate}
+Daftar fitur, laju cuplik, ukuran jendela, ukuran perataan, dan batas pemotongan disimpan dalam satu berkas konfigurasi bersama parameter normalisasi. Program klasifikasi di simulator dan di mobil membaca berkas yang sama, sehingga urutan dan perlakuan fitur pada saat inferensi selalu sama dengan saat pelatihan.
+
+\subsection{Pembuatan Algoritma CNN-BiLSTM dengan PReLU}
+Tahap ini merancang model yang menerima satu jendela telemetri berukuran $W \times 4$ dan menghasilkan probabilitas bahwa jendela tersebut berasal dari perilaku ugal-ugalan. Model memakai arsitektur hibrida. Blok konvolusi mengekstrak pola lokal pendek, lalu lapisan BiLSTM dan LSTM merangkum urutan pola tersebut sepanjang jendela. Tabel~\ref{tab:arsitektur} merinci setiap lapisan. Sebagai contoh, jika $f_{s} = 5$~Hz, maka $W = 15$ dan keluaran \textit{max pooling} berisi 7 langkah.
+
+\begin{table}[H]
+  \centering
+  \caption{Arsitektur model hibrida CNN-BiLSTM dengan PReLU}
+  \label{tab:arsitektur}
+  \small
+  \begin{tabular}{|c|l|p{4.3cm}|c|r|}
+    \hline
+    \textbf{No.} & \textbf{Lapisan} & \textbf{Konfigurasi} & \textbf{Keluaran} & \textbf{Parameter} \\
+    \hline
+    1 & Masukan & jendela telemetri & $W \times 4$ & 0 \\
+    \hline
+    2 & Konvolusi 1D & 32 filter, kernel 3, \textit{padding} kausal & $W \times 32$ & 416 \\
+    \hline
+    3 & PReLU & satu $a$ per filter & $W \times 32$ & 32 \\
+    \hline
+    4 & \textit{Batch normalization} & -- & $W \times 32$ & 128 \\
+    \hline
+    5 & \textit{Max pooling} & ukuran 2 & $\lfloor W/2 \rfloor \times 32$ & 0 \\
+    \hline
+    6 & \textit{Dropout} & $p = 0{,}3$ & $\lfloor W/2 \rfloor \times 32$ & 0 \\
+    \hline
+    7 & BiLSTM & 32 unit per arah, keluaran per langkah & $\lfloor W/2 \rfloor \times 64$ & 16.640 \\
+    \hline
+    8 & \textit{Layer normalization} & -- & $\lfloor W/2 \rfloor \times 64$ & 128 \\
+    \hline
+    9 & LSTM & 16 unit, keluaran langkah terakhir & $16$ & 5.184 \\
+    \hline
+    10 & \textit{Layer normalization} & -- & $16$ & 32 \\
+    \hline
+    11 & \textit{Fully connected} & 16 neuron & $16$ & 272 \\
+    \hline
+    12 & PReLU & satu $a$ per neuron & $16$ & 16 \\
+    \hline
+    13 & \textit{Dropout} & $p = 0{,}3$ & $16$ & 0 \\
+    \hline
+    14 & \textit{Fully connected} + sigmoid & 1 neuron & $1$ & 17 \\
+    \hline
+    \multicolumn{4}{|r|}{\textbf{Total}} & \textbf{22.865} \\
+    \hline
+  \end{tabular}
+\end{table}
+
+Ukuran lapisan sengaja dibuat kecil karena jumlah jendela pada dataset berada pada orde ribuan, sehingga model yang besar mudah menghafal data latih. Konvolusi memakai \textit{padding} kausal agar keluaran setiap langkah hanya bergantung pada cuplikan saat ini dan sebelumnya. Kernel berukuran 3 dipilih karena pola yang membedakan perilaku ugal-ugalan, seperti lonjakan akselerasi dan penekanan pedal gas yang mendadak, terjadi dalam beberapa cuplikan berurutan. \textit{Max pooling} memperpendek deret menjadi setengahnya sebelum masuk ke lapisan rekuren. Lapisan BiLSTM dan LSTM memakai \textit{dropout} 0,2 pada masukannya, dan lapisan BiLSTM juga memakai \textit{recurrent dropout} 0,1.
+
+Jumlah parameter lapisan konvolusi dengan kernel $K$, kanal masukan $F_{\mathrm{in}}$, dan filter $F_{\mathrm{out}}$ adalah
+\begin{equation}
+  N_{\mathrm{konv}} = (K\,F_{\mathrm{in}} + 1)\,F_{\mathrm{out}}
+  \label{eq:met-param}
+\end{equation}
+Pada lapisan konvolusi dengan $K = 3$, $F_{\mathrm{in}} = 4$, dan $F_{\mathrm{out}} = 32$, jumlah parameternya adalah $(3 \times 4 + 1) \times 32 = 416$. Jumlah parameter BiLSTM dihitung dengan Persamaan~\ref{eq:param-lstm} untuk setiap arah, yaitu $2 \times 4\,(32\,(32 + 32) + 32) = 16.640$. Jumlah parameter tidak bergantung pada $W$, karena filter dan bobot LSTM yang sama dipakai di setiap langkah waktu. PReLU memakai satu koefisien $a$ untuk setiap filter atau neuron (Persamaan~\ref{eq:prelu}), sehingga seluruh PReLU hanya menambah 48 parameter, atau sekitar 0,2\% dari total parameter model.
+
+Algoritma model bekerja dengan langkah berikut.
+\begin{enumerate}
+  \item Model menerima satu jendela yang sudah dinormalisasi.
+  \item Lapisan konvolusi kausal mengekstrak pola pendek dari kombinasi keempat fitur, lalu PReLU, \textit{batch normalization}, \textit{max pooling}, dan \textit{dropout} memprosesnya.
+  \item Lapisan BiLSTM membaca langkah-langkah hasil konvolusi dari dua arah dan menghasilkan representasi setiap langkah yang memuat konteks sebelum dan sesudahnya.
+  \item Lapisan LSTM merangkum seluruh langkah menjadi satu vektor berukuran 16.
+  \item Lapisan \textit{fully connected} dengan PReLU dan \textit{dropout} menggabungkan vektor tersebut menjadi representasi akhir.
+  \item Neuron keluaran dengan sigmoid menghasilkan probabilitas $\hat{y}$ bahwa jendela tergolong ugal-ugalan.
+\end{enumerate}
+
+\subsection{\textit{Training} Model dan Optimisasi Model}
+Tahap ini melatih model pada data latih dan menyetel \textit{hyperparameter} dengan data validasi. Data uji tidak dipakai pada tahap ini. Pelatihan memakai \textit{mini-batch}. Pada setiap iterasi, model menghitung probabilitas $\hat{y}$ untuk satu \textit{batch} jendela, menghitung \textit{loss}, lalu memperbarui bobot dengan \textit{optimizer}.
+
+Fungsi \textit{loss} yang dipakai adalah \textit{binary cross-entropy} pada Persamaan~\ref{eq:bce} dengan pembobotan kelas. Setiap suku \textit{loss} dikalikan dengan bobot kelas sampel tersebut, yaitu $w_{1}$ untuk kelas ugal-ugalan dan $w_{0}$ untuk kelas normal. Kedua bobot dihitung dari data latih dengan Persamaan~\ref{eq:bobot-kelas}. Pembobotan ini menjaga agar model tidak condong ke salah satu kelas walaupun jumlah jendela kedua kelas sedikit berbeda.
+
+\textit{Optimizer} yang dipakai adalah Adam. Tabel~\ref{tab:hyperparameter} memuat nilai yang dipakai pada percobaan awal dan rentang pencarian untuk tahap optimisasi.
+
+\begin{table}[H]
+  \centering
+  \caption{\textit{Hyperparameter} pelatihan model}
+  \label{tab:hyperparameter}
+  \small
+  \begin{tabular}{|l|c|c|}
+    \hline
+    \textbf{\textit{Hyperparameter}} & \textbf{Nilai awal} & \textbf{Rentang pencarian} \\
+    \hline
+    Laju pembelajaran awal $\eta$ & $10^{-3}$ & $\{10^{-3}, 10^{-4}\}$ \\
+    \hline
+    Penurunan $\eta$ (\textit{loss} validasi stagnan 8 \textit{epoch}) & $\times 0{,}5$, min. $10^{-6}$ & tetap \\
+    \hline
+    \textit{Batch size} & 32 & $\{32, 64\}$ \\
+    \hline
+    \textit{Dropout} lapisan konvolusi dan \textit{dense} $p$ & 0,3 & $\{0{,}3;\ 0{,}5\}$ \\
+    \hline
+    \textit{Dropout} LSTM / \textit{recurrent dropout} & 0,2 / 0,1 & tetap \\
+    \hline
+    $\beta_{1}$, $\beta_{2}$, $\epsilon$ (Adam) & 0,9; 0,999; $10^{-7}$ & tetap \\
+    \hline
+    Jumlah \textit{epoch} maksimum & 100 & tetap \\
+    \hline
+    \textit{Patience} \textit{early stopping} & 20 & $\{10, 20\}$ \\
+    \hline
+    Durasi jendela / pergeseran & 3~s / 0,5~s & durasi $\in \{2, 3, 5\}$~s \\
+    \hline
+    Ukuran perataan akselerasi $m$ & 3 cuplikan & $\{1, 3, 5\}$ \\
+    \hline
+    Durasi blok pembagian data & 20~s & tetap \\
+    \hline
+    \textit{Seed} acak & 42 & beberapa \textit{seed} \\
+    \hline
+  \end{tabular}
+\end{table}
+
+Pelatihan berhenti lebih awal jika AUC validasi tidak membaik selama 20 \textit{epoch}. Bobot dari \textit{epoch} dengan AUC validasi tertinggi disimpan sebagai bobot model. Laju pembelajaran diturunkan setengahnya jika \textit{loss} validasi tidak membaik selama 8 \textit{epoch}. Kurva \textit{loss}, akurasi, dan AUC data latih serta validasi terhadap \textit{epoch} dipantau untuk mendeteksi \textit{overfitting}. Jika \textit{loss} latih turun sementara \textit{loss} validasi naik, peneliti menaikkan $p$ atau mengurangi kapasitas model.
+
+AUC validasi dapat mencapai nilai maksimum 1 sejak awal pelatihan, terutama jika data validasi berasal dari sesi yang sama dengan data latih. Pada kondisi itu, AUC tidak lagi dapat membedakan \textit{epoch} yang baik dari yang buruk. Oleh karena itu, setelah data dari beberapa sesi tersedia, pemilihan \textit{epoch} terbaik juga memakai \textit{loss} validasi.
+
+Setiap konfigurasi dilatih ulang beberapa kali dengan nilai \textit{seed} acak yang berbeda. Hasilnya dilaporkan sebagai rata-rata dan simpangan baku, sehingga hasil tidak bergantung pada satu inisialisasi bobot yang kebetulan baik. Konfigurasi terbaik dipilih berdasarkan \textit{F1-score} data validasi. Bobot model, parameter normalisasi, pengodean label, dan berkas konfigurasi fitur disimpan untuk dipakai pada tahap pengujian.
+
+Jika hasil evaluasi pada tahap berikutnya belum memenuhi kriteria, penelitian kembali ke tahap ini setelah peneliti memperbaiki sistem, sesuai alur pada Gambar~\ref{fig:urutan}.
+
+\subsection{\textit{Testing} Simulasi pada BeamNG secara \textit{Real-Time}}
+\label{subsec:uji-beamng}
+Tahap ini menguji model terlatih pada aliran data telemetri langsung dari BeamNG. Pengujian ini berbeda dari pengujian pada data uji \textit{offline} karena model harus memproses data yang terus mengalir dan memberi hasil sebelum prediksi berikutnya dijadwalkan. Pengemudi mengemudikan kendaraan di BeamNG memakai set kemudi dan pedal, sedangkan program Python menjalankan klasifikasi.
+
+Program klasifikasi bekerja dengan langkah berikut.
+\begin{enumerate}
+  \item BeamNG mengirim paket OutGauge melalui UDP ke program Python.
+  \item Pada setiap detak jam dengan laju $f_{s}$, program mengambil kecepatan, RPM, dan posisi \textit{throttle} terbaru, membulatkan kecepatan, lalu menghitung akselerasi dengan Persamaan~\ref{eq:moving-average}.
+  \item Program memotong nilai ekstrem dengan batas yang sama seperti saat pelatihan, lalu menyimpan baris tersebut pada \textit{buffer} berukuran $W$.
+  \item Setiap ada cuplikan baru, dan paling cepat setiap 0,3~s, program menormalisasi isi \textit{buffer} memakai parameter dari data latih dan menghitung probabilitas $\hat{y}$.
+  \item Program merata-ratakan probabilitas dalam 4,5 detik terakhir menjadi $\bar{y}$ untuk mengurangi keputusan yang berubah-ubah.
+  \item Program menentukan kelas dengan histeresis, lalu menampilkan hasil pada terminal dan mencatat waktu, $\hat{y}$, $\bar{y}$, label sebenarnya, serta latensi ke berkas CSV.
+\end{enumerate}
+Keputusan kelas memakai dua ambang, yaitu ambang atas $\tau_{\mathrm{atas}} = 0{,}85$ dan ambang bawah $\tau_{\mathrm{bawah}} = 0{,}50$, dengan aturan berikut:
+\begin{enumerate}
+  \item Jika status saat ini normal, status berubah menjadi ugal-ugalan hanya ketika $\bar{y}$ melebihi 0,85.
+  \item Jika status saat ini ugal-ugalan, status kembali menjadi normal hanya ketika $\bar{y}$ turun di bawah 0,50.
+  \item Selain kedua kondisi tersebut, status tidak berubah.
+\end{enumerate}
+Aturan dua ambang ini disebut histeresis. Tanpa histeresis, status dapat berganti-ganti pada setiap prediksi ketika $\bar{y}$ berada di sekitar satu ambang. Kedua ambang dapat disesuaikan pada data validasi jika model masih condong ke satu kelas.
+
+Pengujian memakai sesi mengemudi baru yang tidak termasuk dalam dataset pelatihan. Pengemudi menjalankan sesi normal dan sesi ugal-ugalan dengan kriteria yang sama seperti saat pengambilan data. Label sebenarnya mengikuti jenis sesi yang dijalankan.
+
+Pengujian mengukur tiga hal. Pertama, kebenaran prediksi dihitung dengan mencocokkan kelas hasil prediksi dengan label sesi, lalu hasilnya disajikan dalam \textit{confusion matrix}. Kedua, latensi total setiap prediksi dihitung dari waktu \textit{buffer} diambil sampai prediksi keluar:
+\begin{equation}
+  T_{\mathrm{total}} = T_{\mathrm{pra}} + T_{\mathrm{inf}}
+  \label{eq:met-latensi}
+\end{equation}
+dengan $T_{\mathrm{pra}}$ adalah waktu normalisasi dan pembentukan jendela, dan $T_{\mathrm{inf}}$ adalah waktu inferensi model. Sistem memenuhi syarat \textit{real-time} jika $T_{\mathrm{total}}$ tidak melebihi selang antara dua prediksi dan tidak lebih dari 0,3~s. Penelitian ini melaporkan nilai rata-rata dan nilai maksimum $T_{\mathrm{total}}$. Ketiga, pengujian mengukur waktu deteksi, yaitu selang antara awal sesi ugal-ugalan dan saat status pertama kali berubah menjadi ugal-ugalan. Waktu deteksi mencakup panjang jendela, perataan probabilitas, dan ambang histeresis, sehingga nilainya lebih besar daripada latensi komputasi.
+
+\subsection{\textit{Testing} pada Mobil melalui OBD-II}
+\label{subsec:uji-mobil}
+Tahap ini menguji model pada mobil nyata. Adaptor ELM327 dipasang pada port OBD-II mobil uji. Laptop terhubung ke jaringan WiFi adaptor, lalu program Python membuka koneksi TCP ke adaptor tersebut. Program klasifikasi bekerja dengan langkah berikut.
+\begin{enumerate}
+  \item Program menginisialisasi ELM327 dan meminta PID 00, 20, dan 40 pada mode 01 untuk mengetahui PID yang didukung mobil uji.
+  \item Program membaca PID 0D, 0C, dan 11 secara berulang selama beberapa menit untuk mengukur laju cuplik yang tercapai. Laju ini menjadi $f_{s}$ untuk \textit{resampling} data simulator dan untuk pelatihan model final.
+  \item Saat pengujian, program meminta ketiga PID secara berurutan. Satu putaran permintaan menjadi satu cuplikan, dan waktu tiba setiap jawaban dicatat.
+  \item Program menghitung akselerasi dengan Persamaan~\ref{eq:moving-average}, memotong nilai ekstrem, menormalisasi data memakai parameter dari data latih, lalu mengisi \textit{buffer} berukuran $W$.
+  \item Prediksi, perataan probabilitas, dan keputusan histeresis memakai cara yang sama dengan pengujian di BeamNG.
+\end{enumerate}
+
+Pengujian dilakukan di area tertutup yang bebas dari kendaraan dan pejalan kaki lain, dengan izin pengelola area. Sesi normal berisi akselerasi dan pengereman yang lembut serta kecepatan yang stabil. Sesi agresif terkendali berisi akselerasi penuh dari kondisi berhenti, pengereman keras, serta akselerasi dan pengereman yang berulang, dengan batas kecepatan yang disepakati bersama pembimbing. Pengemudi memakai sabuk pengaman, dan orang kedua di kursi penumpang menjalankan laptop agar pengemudi tetap fokus. Label sebenarnya mengikuti jenis sesi yang dijalankan.
+
+Kecepatan di area tertutup lebih rendah daripada kecepatan di simulator. Hasil pengujian di mobil juga menunjukkan seberapa jauh keputusan model bergantung pada kecepatan. Pengujian ini mengukur kebenaran prediksi, latensi, dan waktu deteksi dengan cara yang sama seperti pengujian di BeamNG.
+
+\subsection{Evaluasi Model}
+Evaluasi menilai model pada empat sumber data, yaitu data uji hasil pembagian per blok, sesi uji simulator yang tidak dipakai saat pelatihan, pengujian \textit{real-time} di BeamNG, dan pengujian di mobil. Evaluasi memakai \textit{confusion matrix} dengan ugal-ugalan sebagai kelas positif, lalu menghitung akurasi, presisi, \textit{recall}, dan \textit{F1-score} dengan Persamaan~\ref{eq:akurasi}, \ref{eq:presisi}, \ref{eq:recall}, dan \ref{eq:f1}, serta AUC. Presisi dan \textit{recall} dihitung untuk kedua kelas karena kecondongan model ke satu kelas hanya terlihat jika kedua kelas dinilai terpisah. \textit{Recall} kelas ugal-ugalan yang rendah menunjukkan banyak perilaku berbahaya yang lolos, sedangkan presisi kelas ugal-ugalan yang rendah menunjukkan banyak pengemudi normal yang salah ditandai.
+
+Selain metrik kinerja, evaluasi memuat tiga analisis tambahan:
+\begin{enumerate}
+  \item \textbf{Ablasi fitur:} model dilatih ulang tanpa fitur tertentu, misalnya tanpa akselerasi atau tanpa posisi \textit{throttle}, untuk mengetahui kontribusi setiap fitur.
+  \item \textbf{Analisis daya pisah fitur:} AUC setiap fitur tunggal dihitung untuk melihat fitur mana yang paling menentukan keputusan model, dan untuk memeriksa apakah model bergantung pada fitur yang dapat menjadi pengganggu.
+  \item \textbf{Pemeriksaan sebaran data mobil:} sebaran setiap fitur pada data mobil diperiksa terhadap rentang data latih, untuk melihat apakah data mobil berada di luar rentang yang pernah dilihat model.
+\end{enumerate}
+
+Alur penelitian pada Gambar~\ref{fig:urutan} menetapkan bahwa model diterima sebagai model final jika memenuhi kriteria. Penelitian ini menetapkan lima kriteria pada Tabel~\ref{tab:kriteria}, dan model harus memenuhi kelimanya.
+
+\begin{table}[H]
+  \centering
+  \caption{Kriteria penerimaan model}
+  \label{tab:kriteria}
+  \begin{tabular}{|c|p{8.5cm}|c|}
+    \hline
+    \textbf{No.} & \textbf{Kriteria} & \textbf{Target} \\
+    \hline
+    1 & Akurasi pada sesi uji simulator dan pengujian \textit{real-time} di BeamNG & $\ge 90\%$ \\
+    \hline
+    2 & \textit{F1-score} setiap kelas pada data simulator & $\ge 0{,}85$ \\
+    \hline
+    3 & Akurasi pada pengujian di mobil & $\ge 80\%$ \\
+    \hline
+    4 & \textit{F1-score} setiap kelas pada pengujian di mobil & $\ge 0{,}75$ \\
+    \hline
+    5 & Latensi total rata-rata & $\le 0{,}3$~s \\
+    \hline
+  \end{tabular}
+\end{table}
+
+Target pada mobil lebih rendah daripada target pada simulator karena model belum pernah melihat data mobil saat pelatihan. Jika seluruh kriteria terpenuhi, model disimpan sebagai model final. Jika salah satu kriteria belum terpenuhi, peneliti memperbaiki sistem sesuai kriteria yang gagal, lalu mengulang tahap \textit{training}. Perbaikan yang dapat dilakukan adalah:
+\begin{enumerate}
+  \item menambah sesi rekaman pada kelas yang \textit{recall}-nya rendah,
+  \item mengubah bobot kelas atau ambang $\tau_{\mathrm{atas}}$ dan $\tau_{\mathrm{bawah}}$ jika model condong ke satu kelas,
+  \item mengubah durasi jendela atau ukuran perataan akselerasi jika pola berkendara tidak tertangkap dengan baik,
+  \item menambah fitur dari PID lain yang didukung mobil uji, atau menyesuaikan rentang kecepatan data latih, jika kinerja pada mobil jauh di bawah kinerja pada simulator,
+  \item mengubah \textit{dropout}, jumlah filter, atau jumlah unit LSTM jika terjadi \textit{overfitting},
+  \item memperkecil model jika latensi melebihi 0,3~s.
+\end{enumerate}

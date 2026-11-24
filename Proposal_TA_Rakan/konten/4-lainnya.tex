@@ -1,0 +1,161 @@
+% !TEX root = ../main.tex
+\chapter{HASIL YANG DIHARAPKAN}
+
+\section{Hasil yang Diharapkan dari Penelitian}
+
+Dari penelitian yang akan dilakukan, diharapkan diperoleh hasil sebagai berikut:
+\begin{enumerate}
+  \item Sistem akuisisi telemetri yang merekam data OutGauge dan MotionSim dari BeamNG.drive pada frekuensi tetap 10~Hz, beserta dataset berlabel normal dan ugal-ugalan dari beberapa sesi mengemudi.
+  \item Program akuisisi OBD-II yang membaca kecepatan, RPM, dan posisi \textit{throttle} dari mobil melalui adaptor ELM327 WiFi, beserta hasil pengukuran laju cuplik yang tercapai.
+  \item Model hibrida CNN-BiLSTM dengan aktivasi PReLU yang memenuhi kriteria pada Tabel~\ref{tab:kriteria}, yaitu akurasi minimal 90\% dan \textit{F1-score} minimal 0,85 untuk setiap kelas pada data simulator, serta akurasi minimal 80\% dan \textit{F1-score} minimal 0,75 untuk setiap kelas pada pengujian di mobil.
+  \item Analisis kontribusi setiap fitur terhadap keputusan model.
+  \item Program klasifikasi \textit{real-time} untuk simulator dan mobil yang menghasilkan prediksi dengan latensi rata-rata tidak lebih dari 0,3~s.
+\end{enumerate}
+
+\section{Hasil Pendahuluan}
+
+Sampai saat ini telah dilakukan dua percobaan pelatihan di simulator dengan susunan lapisan pada Tabel~\ref{tab:arsitektur}, \textit{hyperparameter} awal pada Tabel~\ref{tab:hyperparameter}, dan pembagian data per blok. Kedua percobaan ini dilakukan sebelum rencana pengujian di mobil ditetapkan, sehingga masih memakai data 10~Hz dengan jendela 30 cuplikan dan fitur dari OutGauge serta MotionSim. Kedua percobaan berbeda pada data, fitur, dan penyaringan yang dipakai. Tabel~\ref{tab:kondisi-percobaan} merangkum perbedaan tersebut.
+
+\begin{table}[H]
+  \centering
+  \caption{Kondisi kedua percobaan awal}
+  \label{tab:kondisi-percobaan}
+  \small
+  \begin{tabular}{|p{3.6cm}|p{5cm}|p{5cm}|}
+    \hline
+    \textbf{Aspek} & \textbf{Percobaan 1} & \textbf{Percobaan 2} \\
+    \hline
+    Jumlah fitur & 8: kecepatan, RPM, gigi, pedal gas, pedal rem, akselerasi longitudinal dan lateral, laju yaw & 11: delapan fitur tersebut ditambah sudut kemudi hasil estimasi dan dua turunannya \\
+    \hline
+    Pembacaan MotionSim & Struktur paket belum sesuai; kolom laju yaw berisi posisi vertikal kendaraan & Sesuai dokumentasi dan telah diverifikasi \\
+    \hline
+    Filter kelas normal & RPM $\le$ 4000, pedal gas $\le$ 70\%, kecepatan $\le$ 120 km/jam & Tidak ada; hanya kecepatan $\ge$ 15 km/jam untuk kedua kelas \\
+    \hline
+    Data & Sekitar 5.000 baris per kelas & 4.536 baris normal, 4.670 baris ugal-ugalan; satu sesi per kelas \\
+    \hline
+    Pengemudi & 1 (peneliti) & 1 (peneliti) \\
+    \hline
+    Data uji & 249 jendela & 213 jendela \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\subsection{Percobaan 1}
+Tabel~\ref{tab:cm-1} dan Tabel~\ref{tab:metrik-1} menunjukkan hasil percobaan pertama pada data uji. Model mencapai akurasi 88\%. Seluruh jendela normal dikenali dengan benar, tetapi 29 dari 144 jendela ugal-ugalan (20\%) diprediksi normal. Artinya, satu dari lima kejadian ugal-ugalan lolos tanpa terdeteksi.
+
+\begin{table}[H]
+  \centering
+  \caption{\textit{Confusion matrix} percobaan 1}
+  \label{tab:cm-1}
+  \begin{tabular}{|l|c|c|}
+    \hline
+     & \textbf{Prediksi ugal-ugalan} & \textbf{Prediksi normal} \\
+    \hline
+    \textbf{Aktual ugal-ugalan} & 115 & 29 \\
+    \hline
+    \textbf{Aktual normal} & 0 & 105 \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\begin{table}[H]
+  \centering
+  \caption{Metrik klasifikasi percobaan 1 pada data uji}
+  \label{tab:metrik-1}
+  \begin{tabular}{|l|c|c|c|c|}
+    \hline
+    \textbf{Kelas} & \textbf{Presisi} & \textbf{\textit{Recall}} & \textbf{\textit{F1-score}} & \textbf{Jumlah jendela} \\
+    \hline
+    Ugal-ugalan & 1,00 & 0,80 & 0,89 & 144 \\
+    \hline
+    Normal & 0,78 & 1,00 & 0,88 & 105 \\
+    \hline
+    \multicolumn{5}{|l|}{Akurasi: 0,88} \\
+    \hline
+  \end{tabular}
+\end{table}
+
+Kurva pelatihan memperlihatkan akurasi latih mendekati 99,7\% sementara \textit{loss} validasi naik kembali setelah sekitar \textit{epoch} ke-8, yang menandakan \textit{overfitting}. AUC validasi terbaik sudah tercapai pada \textit{epoch} pertama, sehingga bobot yang dipakai untuk pengujian berasal dari model yang baru dilatih satu \textit{epoch}. Konvergensi secepat ini sejalan dengan filter kelas normal. Karena baris normal dengan RPM, pedal gas, atau kecepatan tinggi dibuang, kelas normal secara konstruksi tidak pernah memiliki nilai tersebut, dan model cukup mengenali batas filter. Pemeriksaan berikutnya juga menemukan bahwa struktur paket MotionSim belum terbaca dengan benar, sehingga kolom laju yaw sebenarnya berisi koordinat posisi vertikal kendaraan.
+
+\subsection{Percobaan 2}
+Berdasarkan temuan percobaan 1, dilakukan tiga perbaikan. Pertama, filter khusus kelas normal dihapus sehingga label hanya ditentukan oleh sesi rekaman. Kedua, pembacaan paket MotionSim diperbaiki sesuai struktur pada dokumentasi BeamNG dan diverifikasi dengan pengujian di dalam simulator. Ketiga, tiga fitur sudut kemudi ditambahkan. Tabel~\ref{tab:cm-2} dan Tabel~\ref{tab:metrik-2} menunjukkan hasilnya.
+
+\begin{table}[H]
+  \centering
+  \caption{\textit{Confusion matrix} percobaan 2}
+  \label{tab:cm-2}
+  \begin{tabular}{|l|c|c|}
+    \hline
+     & \textbf{Prediksi ugal-ugalan} & \textbf{Prediksi normal} \\
+    \hline
+    \textbf{Aktual ugal-ugalan} & 105 & 0 \\
+    \hline
+    \textbf{Aktual normal} & 6 & 102 \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\begin{table}[H]
+  \centering
+  \caption{Metrik klasifikasi percobaan 2 pada data uji}
+  \label{tab:metrik-2}
+  \begin{tabular}{|l|c|c|c|c|}
+    \hline
+    \textbf{Kelas} & \textbf{Presisi} & \textbf{\textit{Recall}} & \textbf{\textit{F1-score}} & \textbf{Jumlah jendela} \\
+    \hline
+    Ugal-ugalan & 0,95 & 1,00 & 0,97 & 105 \\
+    \hline
+    Normal & 1,00 & 0,94 & 0,97 & 108 \\
+    \hline
+    \multicolumn{5}{|l|}{Akurasi: 0,97} \\
+    \hline
+  \end{tabular}
+\end{table}
+
+Akurasi naik dari 88\% menjadi 97\%, dan \textit{F1-score} kedua kelas naik menjadi 0,97. Pola kesalahannya juga berbalik. Tidak ada jendela ugal-ugalan yang lolos (\textit{recall} 1,00), dan kesalahan yang tersisa berupa 6 jendela normal yang ditandai ugal-ugalan. Untuk sistem pemantau keselamatan, alarm palsu semacam ini lebih dapat diterima daripada perilaku berbahaya yang tidak terdeteksi. Kurva pelatihan tidak lagi menunjukkan \textit{loss} validasi yang naik, dan pelatihan berlangsung sekitar 37 \textit{epoch}.
+
+Untuk melihat fitur yang paling menentukan, dihitung AUC setiap fitur tunggal pada dataset percobaan 2. Tabel~\ref{tab:auc-fitur} menunjukkan hasilnya. Untuk fitur yang bertanda, yaitu akselerasi, laju yaw, dan fitur kemudi, AUC dihitung dari nilai mutlaknya atau dari simpangan bakunya dalam satu jendela, karena belok ke kiri dan ke kanan sama-sama dapat menandakan perilaku ugal-ugalan.
+
+\begin{table}[H]
+  \centering
+  \caption{AUC fitur tunggal pada dataset percobaan 2}
+  \label{tab:auc-fitur}
+  \small
+  \begin{tabular}{|l|l|c|}
+    \hline
+    \textbf{Fitur} & \textbf{Bentuk} & \textbf{AUC} \\
+    \hline
+    Putaran mesin & nilai per cuplikan & 0,93 \\
+    \hline
+    Posisi gigi & nilai per cuplikan & 0,80 \\
+    \hline
+    Akselerasi longitudinal & nilai mutlak per cuplikan & 0,78 \\
+    \hline
+    Akselerasi lateral & simpangan baku per jendela & 0,76 \\
+    \hline
+    Laju yaw & simpangan baku per jendela & 0,74 \\
+    \hline
+    Kecepatan & nilai per cuplikan & 0,70 \\
+    \hline
+    Kedalaman pedal gas & nilai per cuplikan & 0,70 \\
+    \hline
+    Kecepatan sudut kemudi & simpangan baku per jendela & 0,68 \\
+    \hline
+    Sudut kemudi & simpangan baku per jendela & 0,67 \\
+    \hline
+  \end{tabular}
+\end{table}
+
+Putaran mesin dan posisi gigi menjadi pembeda terkuat. Pada sesi normal, 54\% cuplikan berada pada gigi 7, sedangkan pada sesi ugal-ugalan sebagian besar cuplikan berada pada gigi 3 sampai 5 dengan putaran mesin yang lebih tinggi. Hal ini sesuai dengan indikator perilaku agresif pada BAB II. Fitur gerak lateral dan kemudi tidak membedakan kelas melalui nilai sesaatnya, tetapi melalui variasinya dalam satu jendela, yang merupakan jenis pola yang ditangkap oleh lapisan konvolusi dan LSTM.
+
+Model final memakai empat fitur inti pada Tabel~\ref{tab:fitur}, karena mobil uji hanya menyediakan data melalui OBD-II. Tiga fitur inti, yaitu putaran mesin (AUC 0,93), kecepatan (0,70), dan kedalaman pedal gas (0,70), sudah membedakan kelas pada dataset percobaan 2. Nilai AUC akselerasi longitudinal sebesar 0,78 berasal dari MotionSim, sehingga daya pisah akselerasi hasil selisih kecepatan perlu diukur ulang. Posisi gigi dengan AUC 0,80 tidak termasuk fitur inti dan hanya ditambahkan jika mobil uji menyediakannya.
+
+\subsection{Keterbatasan Hasil Pendahuluan}
+Hasil percobaan 2 belum dapat dijadikan ukuran kemampuan generalisasi model, karena tiga alasan berikut.
+\begin{enumerate}
+  \item Setiap kelas baru memiliki satu sesi rekaman, masing-masing sekitar 7,5 menit. Data latih, validasi, dan uji berasal dari blok-blok sesi yang sama, sehingga kondisinya mirip. Akurasi dan AUC validasi mencapai 1,00 sejak sekitar \textit{epoch} ke-6, yang menunjukkan bahwa data validasi terlalu mudah untuk memilih model terbaik.
+  \item Dominasi putaran mesin dan posisi gigi perlu dipastikan berasal dari perilaku pengemudi, bukan dari perbedaan mode transmisi atau kendaraan antar sesi.
+  \item Data ugal-ugalan memuat satu lonjakan akselerasi longitudinal sebesar $-18{,}9$~m/s$^{2}$ yang kemungkinan besar berasal dari tabrakan. Nilai ini sudah terpotong oleh batas $\pm 15$~m/s$^{2}$, tetapi kejadian tabrakan seharusnya tidak masuk ke dataset.
+\end{enumerate}
+
+Langkah berikutnya adalah merekam tiga sampai lima sesi per kelas dari peneliti dan dua sampai tiga pengemudi lain, dengan rute yang berbeda serta kendaraan dan mode transmisi yang sama. Setelah itu, satu sesi utuh per kelas disisihkan sebagai data uji. Sebelum pelatihan ulang, peneliti memeriksa PID yang didukung mobil uji dan mengukur laju cuplik ELM327. Model kemudian dilatih ulang dengan fitur inti pada laju cuplik tersebut memakai beberapa \textit{seed}, diuji secara \textit{real-time} di BeamNG, lalu diuji pada mobil di area tertutup.

@@ -1,0 +1,198 @@
+% Pengaturan ukuran teks dan bentuk halaman dua sisi
+\documentclass[12pt]{book}
+
+% Pengaturan ukuran halaman dan margin
+\usepackage[a4paper,top=30mm,left=30mm,right=20mm,bottom=25mm]{geometry}
+
+% Pengaturan bahasa Indonesia untuk pemotongan kata (Hyphenation) & Rata Kanan-Kiri
+\usepackage[indonesian]{babel}
+\usepackage{ragged2e}
+
+% Pengaturan ukuran spasi
+\usepackage[singlespacing]{setspace}
+
+% Pengaturan caption untuk tabel
+\usepackage{caption}
+
+% Judul dokumen
+\title{Proposal Tugas Akhir ITS}
+\author{Rakan, Sultan Syafiq}
+
+% Pengaturan detail pada file PDF
+\usepackage[pdfauthor={Rakan, Sultan Syafiq},bookmarksnumbered,pdfborder={0 0 0}]{hyperref}
+
+% Pengaturan ukuran indentasi
+% Paragraf rata kanan-kiri tanpa inden baris pertama; antarparagraf diberi jarak
+\usepackage[skip=6pt plus 2pt, indent=0pt]{parskip}
+\setlength{\JustifyingParindent}{0pt} % \justifying (ragged2e) memakai nilai ini, bukan \parindent
+\usepackage{microtype} % Merapikan spasi antarkata agar tidak ada baris yang keluar margin kanan
+\setlength{\emergencystretch}{1.5em}
+
+% Package lainnya
+\usepackage{changepage}
+\usepackage{etoolbox} % Mengubah fungsi default
+
+% Pengaturan jenis karakter & Font Times Modern
+\usepackage[utf8]{inputenc}
+\usepackage{amsmath} % Untuk environment cases dan persamaan
+\usepackage{newtxtext,newtxmath} % Pengganti txfonts yang modern & stabil
+
+\usepackage[style=ieee, backend=biber, safeinputenc]{biblatex} % string bahasa dari indonesian.lbx
+\usepackage{enumitem} % Pembuatan list
+\usepackage{lipsum} % Pembuatan template kalimat
+\usepackage{graphicx} % Input gambar
+\usepackage{longtable} % Pembuatan tabel
+\usepackage[table,xcdraw]{xcolor} % Pewarnaan tabel
+\usepackage{eso-pic} % Untuk menggunakan background image di halaman
+\usepackage{multicol} % Pembuatan kolom ganda
+\usepackage{multirow} % Pembuatan baris ganda
+\usepackage{tabularx} % Untuk mengatur kolom, seperti grid pada CSS
+\usepackage{wrapfig}
+\usepackage{float}
+\usepackage{tikz} % Flowchart penelitian
+\usetikzlibrary{positioning,shapes.geometric,arrows.meta}
+
+% Pengaturan format daftar isi, daftar gambar, dan daftar tabel
+\usepackage[titles]{tocloft}
+\setlength{\cftsecindent}{2em}
+\setlength{\cftsubsecindent}{2em}
+\setlength{\cftbeforechapskip}{1.5ex}
+\setlength{\cftbeforesecskip}{1.5ex}
+\setlength{\cftbeforetoctitleskip}{0cm}
+\setlength{\cftbeforeloftitleskip}{0cm}
+\setlength{\cftbeforelottitleskip}{0cm}
+\renewcommand{\cfttoctitlefont}{\hfill\Large\bfseries} % command untuk membuat heading bold dan besar
+\renewcommand{\cftaftertoctitle}{\hfill}
+\renewcommand{\cftloftitlefont}{\hfill\Large\bfseries}
+\renewcommand{\cftafterloftitle}{\hfill}
+\renewcommand{\cftlottitlefont}{\hfill\Large\bfseries}
+\renewcommand{\cftafterlottitle}{\hfill}
+
+% Definisi untuk "Halaman ini sengaja dikosongkan"
+\patchcmd{\cleardoublepage}{\hbox{}}{
+  \thispagestyle{empty}
+  \vspace*{\fill}
+  \begin{center}\textit{[Halaman ini sengaja dikosongkan]}\end{center}
+  \vfill}{}{}
+
+% Pengaturan penomoran halaman
+\usepackage{fancyhdr}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0pt}
+\pagestyle{fancy}
+\fancyfoot[C,CO]{\thepage}
+\patchcmd{\chapter}{plain}{fancy}{}{}
+\patchcmd{\chapter}{empty}{plain}{}{}
+
+% Pengaturan format judul bab
+\usepackage{titlesec}
+\renewcommand{\thesection}{\thechapter.\arabic{section}}
+\titleformat{\chapter}[hang]{\centering\bfseries\large}{BAB\ \arabic{chapter}\ }{0ex}{\vspace{0ex}\centering}
+\titleformat*{\section}{\large\bfseries}
+\titleformat*{\subsection}{\normalsize\bfseries}
+\titlespacing{\chapter}{0ex}{0ex}{4ex}
+\titlespacing{\section}{0ex}{1ex}{0ex}
+\titlespacing{\subsection}{0ex}{0.5ex}{0ex}
+\titleformat{\subsubsection}{\normalsize\bfseries}{\thesubsubsection}{1em}{}
+\titlespacing{\section}{0pt}{2ex plus .5ex minus .2ex}{1ex}
+\titlespacing{\subsection}{0pt}{1.5ex plus .5ex minus .2ex}{0.8ex}
+\titlespacing{\subsubsection}{0pt}{1.2ex plus .4ex minus .2ex}{0.6ex}
+\raggedbottom % Matikan peregangan vertikal halaman
+\setcounter{secnumdepth}{3} % Untuk memberi penomoran pada \subsubsection
+
+\counterwithin{figure}{chapter}
+\counterwithin{table}{chapter}
+
+% Mengganti figure dan table menjadi gambar dan tabel
+\renewcommand{\figurename}{Gambar}
+\renewcommand{\tablename}{Tabel}
+
+\input{pustaka/tanda-hubung.tex}
+
+% Menambahkan resource daftar pustaka
+\addbibresource{pustaka/pustaka.bib}
+
+% Isi keseluruhan dokumen
+\begin{document}
+  \justifying % Memaksa seluruh dokumen rata kanan-kiri (Justified)
+
+  % Nomor halaman pembuka dimulai dari sini
+  \pagenumbering{roman}
+
+  % Atur ulang penomoran halaman
+  \setcounter{page}{1}
+
+  % Sampul Bahasa Indonesia
+  \newcommand\covercontents{sampul/konten-id.tex}
+  \input{sampul/sampul-luar.tex}
+
+  % Lembar pengesahan
+  \input{lainnya/lembar-pengesahan.tex}
+  \cleardoublepage
+
+  % Abstrak
+  \input{lainnya/abstrak.tex}
+  \cleardoublepage
+
+  \input{lainnya/abstrak-en.tex}
+  \cleardoublepage
+
+  \begin{spacing}{1.5}
+    \setlength{\parskip}{0pt} % Daftar isi tetap rapat
+    % Daftar isi
+    \renewcommand*\contentsname{DAFTAR ISI}
+    \addcontentsline{toc}{chapter}{\contentsname}
+    \tableofcontents
+    \cleardoublepage
+
+    % Daftar gambar
+    \renewcommand*\listfigurename{DAFTAR GAMBAR}
+    \addcontentsline{toc}{chapter}{\listfigurename}
+    \listoffigures
+    \cleardoublepage
+
+    % Daftar tabel
+    \renewcommand*\listtablename{DAFTAR TABEL}
+    \addcontentsline{toc}{chapter}{\listtablename}
+    \listoftables
+    \cleardoublepage
+  \end{spacing}
+
+  % Nomor halaman isi dimulai dari sini
+  \pagenumbering{arabic}
+
+  % Konten pendahuluan
+  \input{konten/1-pendahuluan.tex}
+  \cleardoublepage
+
+  % Konten tinjauan pustaka
+  \input{konten/2-tinjauan-pustaka.tex}
+  \cleardoublepage
+
+  % Konten metodologi
+  \input{konten/3-metodologi.tex}
+  \cleardoublepage
+
+  % Konten lainnya
+  \input{konten/4-lainnya.tex}
+  \cleardoublepage
+
+  \input{konten/5-jadwal-penelitian.tex}
+  \cleardoublepage
+
+  % Daftar pustaka
+  \chapter*{DAFTAR PUSTAKA}
+  \addcontentsline{toc}{chapter}{DAFTAR PUSTAKA}
+  \renewcommand\refname{}
+  \vspace{2ex}
+  \renewcommand{\bibname}{}
+  % Sitasi hanya ditulis di Bab 1; rujukan yang hanya disebut di Bab 2 dan 3 tetap dicetak
+  \nocite{Handayani2017, Rajamani2012, BeamNG, Schuster1997, Ioffe2015, Ba2016,
+    Kingma2015, Srivastava2014, Fawcett2006, Carmona2015, Singh2025, Fadzil2024,
+    Sagbas2026, Ceven2022, SAEJ1979}
+  \begingroup
+    \def\chapter*#1{}
+    \printbibliography
+  \endgroup
+
+\end{document}

@@ -1,0 +1,28 @@
+% !TEX root = ../main.tex
+\chapter*{ABSTRAK}
+\begin{center}
+  \large
+  \textbf{KLASIFIKASI PERILAKU PENGEMUDI AGRESIF PADA KENDARAAN BERBASIS TELEMETRI OBD-II MENGGUNAKAN CNN-BILSTM DAN PRELU}
+\end{center}
+\addcontentsline{toc}{chapter}{ABSTRAK}
+% Menyembunyikan nomor halaman
+\thispagestyle{empty}
+
+\begin{flushleft}
+  \setlength{\tabcolsep}{0pt}
+  \bfseries
+  \begin{tabular}{ll@{\hspace{6pt}}l}
+  Nama Mahasiswa / NRP&:& Sultan Syafiq Rakan / 5024231009\\
+  Departemen&:& Teknik Komputer FTEIC - ITS\\
+  Dosen Pembimbing&:& Dr. Ahmad Zaini, S.T., M.Sc.\\
+  \end{tabular}
+  \vspace{4ex}
+\end{flushleft}
+\textbf{Abstrak}
+
+% Isi Abstrak
+Perilaku mengemudi ugal-ugalan menjadi salah satu penyebab utama kecelakaan lalu lintas, sehingga dibutuhkan sistem yang mengenali perilaku tersebut saat terjadi. Deteksi berbasis kamera membutuhkan komputasi besar dan hanya dapat memantau ruas jalan yang terpasang kamera, sedangkan pemantauan berbasis data kendaraan masih memakai aturan dan ambang batas yang ditentukan secara manual. Penelitian ini mengusulkan klasifikasi perilaku pengemudi dari telemetri kendaraan menggunakan arsitektur hibrida \textit{Convolutional Neural Network} dan \textit{Bidirectional Long Short-Term Memory} (CNN-BiLSTM) dengan fungsi aktivasi \textit{Parametric Rectified Linear Unit} (PReLU). Data latih diambil dari simulator BeamNG.drive melalui protokol UDP OutGauge, dari sesi mengemudi normal dan ugal-ugalan oleh beberapa pengemudi, karena merekam perilaku ugal-ugalan di jalan raya berbahaya. Model kemudian diuji pada mobil nyata yang datanya dibaca melalui port OBD-II dengan adaptor ELM327 WiFi di area tertutup. Agar dapat dipakai pada kedua sumber data, model memakai empat fitur inti yang tersedia di simulator dan di mobil, yaitu kecepatan, putaran mesin, posisi \textit{throttle}, dan akselerasi longitudinal yang dihitung dari selisih kecepatan. Laju cuplik dan resolusi kecepatan data simulator disamakan dengan data OBD-II, lalu data dinormalisasi dengan \textit{Z-score} dan dipotong menjadi jendela tiga detik. Data latih, validasi, dan uji dibagi per blok agar jendela yang tumpang tindih tidak bocor ke data uji. Lapisan konvolusi mengekstrak pola sesaat, lalu lapisan BiLSTM dan LSTM merangkum urutan pola dalam jendela. PReLU mempelajari kemiringan sisi negatifnya selama pelatihan sehingga diharapkan mencegah \textit{dying ReLU}. Model dievaluasi dengan akurasi, presisi, \textit{recall}, \textit{F1-score}, AUC, latensi inferensi, dan waktu deteksi, baik di simulator maupun di mobil. Percobaan pendahuluan di simulator dengan sebelas fitur, satu sesi per kelas, dan satu pengemudi menghasilkan akurasi 97,2\% dan \textit{recall} kelas ugal-ugalan 1,00 pada data uji. Angka ini belum mengukur kemampuan generalisasi, karena data latih dan data uji masih berasal dari sesi yang sama. Penelitian ini diharapkan menjadi dasar sistem pemantauan perilaku pengemudi berbasis OBD-II yang bekerja secara \textit{real-time}.
+
+\vspace{2ex}
+\noindent
+\textbf{Kata Kunci: \emph{CNN-BiLSTM, PReLU, OBD-II, BeamNG.drive, Perilaku Mengemudi Agresif}}
